@@ -28,7 +28,11 @@ public:
     }
 
     // 读取文件，将元素放入grid
-    void readfile(const std::string filename)
+    void readfile(const std::string filename);
+    void ReadFromStandardInput();
+};
+
+void Map::readfile(const std::string filename)
     {
         std::ifstream file(filename); // 打开文件
         if (!file.is_open())
@@ -50,4 +54,22 @@ public:
 
         file.close(); // 关闭文件
     }
-};
+
+void Map::ReadFromStandardInput(){
+    std::string line;
+    int lineCount = 0;
+
+    // 读取地图数据：200行*200列
+    while (lineCount < 200 && std::getline(std::cin, line)) {
+        if (line.size() < 200) {
+            std::cerr << "错误:输入行的长度小于200个字符" << std::endl;
+            return ; // 或者处理错误
+        }
+        std::vector<char> row;
+        for (int i = 0; i < 200; ++i) {
+            row.push_back(line[i]);
+        }
+        grid.push_back(row);
+        ++lineCount;
+    }
+}
