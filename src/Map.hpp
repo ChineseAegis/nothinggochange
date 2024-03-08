@@ -1,7 +1,7 @@
 #pragma once
 #include <iostream>
 #include <string>
-#include<vector>
+#include <vector>
 // 处理地图，存储地图数据
 class Map
 {
@@ -22,10 +22,15 @@ public:
     //二维数组，代表地图中每个坐标的元素
     std::vector<std::vector<char>> grid;
 
+    Map()
+    {
+        std::cout<<"Map constructing"<<std::endl;
+    }
+
 
     // 读取文件，将元素放入grid
     void readfile(std::string filename)
     {
-
+      
     }
 };
