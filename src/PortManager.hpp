@@ -40,7 +40,7 @@ class PortManager
    void run();//主函数，在main中调用这个函数
    void initData();//从标准输入初始化数据
    void readFrame();//从一帧中读取数据
-   void outputFrame();//输出一帧
+   void outputFrame();//输出一帧..
 
    
 
