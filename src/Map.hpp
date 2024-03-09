@@ -29,6 +29,7 @@ public:
 
     // 读取文件，将元素放入grid
     void readfile(const std::string filename);
+    //从标准输入读取文件
     void ReadFromStandardInput();
 };
 

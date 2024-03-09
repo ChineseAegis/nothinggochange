@@ -6,7 +6,7 @@ public:
     int id;
     int x, y; // 泊位左上角坐标
     int time; // 到达虚拟点的时间
-    int velocity; // 装载速度
+    int velocity; // 装载速度,指每帧可以装载的物品数
 
     Berth(){
 
