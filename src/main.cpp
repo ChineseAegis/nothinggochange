@@ -1,11 +1,12 @@
-// #include <iostream>
-// #include"Map.hpp"
-// using namespace std;
-//test
-//test2
-// int main(int argc, char **argv)
-// {
-//     Map map;
-//     cout << "hello world!" << endl;
-//     return 0;
-// }
+#include <iostream>
+#include"Map.hpp"
+#include"PortManager.hpp"
+using namespace std;
+PortManager p;
+int main()
+{
+
+
+    p.run();
+    return 0;
+}
