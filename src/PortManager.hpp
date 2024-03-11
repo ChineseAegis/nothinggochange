@@ -23,7 +23,7 @@ public:
    int robot_num = 10, berth_num = 10, ship_num = 5;
    int boat_capacity;       // 每艘船的容积，是相等的
    int money, rt_money;     // 当前金钱总数,rt表示实时数据
-   int frameId, rt_frameId; // 当前帧序号
+   int frameId; // 当前帧序号
    bool readyOutput = 1;
    bool readyInput = 1;
    int thread_status = 1;
@@ -34,6 +34,7 @@ public:
    std::vector<Ship> shipVector, rt_shipVector;                          // 船的数组,索引就是船的id
    std::vector<Robot> robotVector, rt_robotVector;                       // 机器人的数组，索引就是机器人id
    std::unordered_map<std::pair<int, int>, Object, pair_hash> objectMap; // 存储物品的哈希表，键值是坐标。
+   std::queue<Object> deleteQueue; //消失物品的队列
 
    // std::priority_queue<InstructQueue,std::vector<InstructQueue>,CompareInstructQueue> instruction;//指令队列，存储所有指令，注意，队列元素是队列，元素队列中才存储指令
    std::queue<std::string> robotInstruction;
@@ -48,6 +49,7 @@ public:
    bool isValid(int x, int y);
    std::vector<MobileEquipment> bfs( MobileEquipment start, MobileEquipment end);
    void all_path(std::queue<Object>&goods);
+   void deleteObject();
 };
 void PortManager::initData()
 {
@@ -83,15 +85,16 @@ void PortManager::initData()
 int PortManager::readFrame()
 {
 
-   scanf("%d%d", &rt_frameId, &rt_money);
+   scanf("%d%d", &frameId, &rt_money);
    int num;
    scanf("%d", &num);
    for (int i = 1; i <= num; i++)
    {
       int x, y, val;
       scanf("%d%d%d", &x, &y, &val);
-      objectQueue.push(Object(x, y, val));
-      objectMap.insert(std::make_pair(std::make_pair(x, y),Object(x, y, val) ));
+      objectQueue.push(Object(x, y, val,frameId+1000));
+      deleteQueue.push(Object(x, y, val,frameId+1000));
+      objectMap.insert(std::make_pair(std::make_pair(x, y),Object(x, y, val,frameId+1000) ));
    }
    for (int i = 0; i < robot_num; i++)
    {
@@ -128,7 +131,8 @@ int PortManager::readFrame()
    char okk[100];
    scanf("%s", okk);
    all_path(objectQueue);
-   return rt_frameId;
+
+   return frameId;
 }
 void PortManager::outputFrame()
 {
@@ -169,6 +173,14 @@ void PortManager::input()
    }
    // outputFrame();
    thread_status = 0;
+}
+void PortManager::deleteObject()
+{
+   while(!deleteQueue.empty()&&deleteQueue.front().disappearFrame<=frameId)
+   {
+      objectMap.erase(std::make_pair(deleteQueue.front().x,deleteQueue.front().y));
+      deleteQueue.pop();
+   }
 }
 void PortManager::run()
 {

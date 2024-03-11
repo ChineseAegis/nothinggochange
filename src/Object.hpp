@@ -10,7 +10,8 @@ public:
   int money;
   int dist = std::numeric_limits<int>::max();
   int berthid;
-  Object(int x, int y, int money) : MobileEquipment(x, y), money(money)
+  int disappearFrame;
+  Object(int x, int y, int money,int disappearFrame) : MobileEquipment(x, y), money(money),disappearFrame(disappearFrame)
   {
   }
   Object()
