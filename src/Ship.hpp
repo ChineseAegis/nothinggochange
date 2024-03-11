@@ -1,6 +1,6 @@
 #pragma once
 #include"MobileEquipment.hpp"
-//船类
+//船类//
 class Ship:public MobileEquipment {
 public:
     int id;//唯一id
