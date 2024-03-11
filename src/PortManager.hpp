@@ -12,6 +12,10 @@
 #include <mutex>
 #include <unistd.h>
 #include"PairHash.hpp"
+#include <utility>
+#include <algorithm> // std::shuffle
+#include <random>    // std::default_random_engine
+#include <chrono> 
 // 管理地图，船，泊位，机器人的类
 class PortManager
 {
@@ -20,7 +24,7 @@ public:
 
 struct Compare
    {
-      bool operator()(const Object& a,const Object& b)
+      bool operator()(const Object& a,const Object& b)const
       {
         double ratio1=a.money/a.dist;
         double ratio2=b.money/b.dist;
@@ -327,7 +331,12 @@ std::vector<MobileEquipment> PortManager::bfs( MobileEquipment start, MobileEqui
     std::vector<MobileEquipment> path;//路径
     std::map<std::pair<int, int>, std::pair<int, int>> parent;//节点的上一个节点
     std::vector<std::pair<int, int>> directions{{-1, 0}, {1, 0}, {0, -1}, {0, 1}};//上下左右
+   
+   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+   std::default_random_engine engine(seed);
 
+    // 打乱directions数组
+    std::shuffle(directions.begin(), directions.end(), engine);
     q.push(start);
     visited[start.x][start.y] = true;
     parent[{start.x, start.y}] = {-1, -1};
