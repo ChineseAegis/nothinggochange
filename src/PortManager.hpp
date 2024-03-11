@@ -11,18 +11,9 @@
 #include <unordered_map>
 #include <mutex>
 #include <unistd.h>
+#include"PairHash.hpp"
 // 管理地图，船，泊位，机器人的类
-struct pair_hash
-{
-   template <class T1, class T2>
-   std::size_t operator()(const std::pair<T1, T2> &pair) const
-   {
-      auto hash1 = std::hash<T1>{}(pair.first);
-      auto hash2 = std::hash<T2>{}(pair.second);
-      // 使用一个常数来混合hash1和hash2，这里的常数31是一个小质数，但可以选择其他值
-      return hash1 * 31 + hash2;
-   }
-};
+
 class PortManager
 {
 
@@ -53,6 +44,10 @@ public:
    void initData();    // 从标准输入初始化数据
    int readFrame();    // 从一帧中读取数据
    void outputFrame(); // 输出一帧..
+   void cal_path_of_maxvalue();//每个泊位对应的搬运队列
+   bool isValid(int x, int y);
+   std::vector<MobileEquipment> bfs( MobileEquipment start, MobileEquipment end);
+   void all_path(std::queue<Object>&goods);
 };
 void PortManager::initData()
 {
@@ -82,6 +77,8 @@ void PortManager::initData()
    rt_shipVector.resize(ship_num);
    robotVector.resize(robot_num);
    rt_robotVector.resize(robot_num);
+
+
 }
 int PortManager::readFrame()
 {
@@ -93,7 +90,7 @@ int PortManager::readFrame()
    {
       int x, y, val;
       scanf("%d%d%d", &x, &y, &val);
-      //objectQueue.push(Object(x, y, val));
+      objectQueue.push(Object(x, y, val));
       objectMap.insert(std::make_pair(std::make_pair(x, y),Object(x, y, val) ));
    }
    for (int i = 0; i < robot_num; i++)
@@ -130,6 +127,7 @@ int PortManager::readFrame()
    // }
    char okk[100];
    scanf("%s", okk);
+   all_path(objectQueue);
    return rt_frameId;
 }
 void PortManager::outputFrame()
@@ -217,4 +215,120 @@ void PortManager::run()
    //    //m.unlock();
 
    // }
+}
+void PortManager::cal_path_of_maxvalue(){//传入货物数组
+	for(int j=0;j<berthVector.size();j++){
+      int max=0;
+      Berth b=berthVector[j];
+	for(auto good:objectMap){
+      Object g=good.second;
+		if(g.setdist(b)){
+			berthVector[g.berthid].path_of_move.remove(std::make_pair(g.x,g.y));
+		}
+	}
+	for(auto good:objectMap){
+      Object g=good.second;
+		if(g.dist>max){
+			max=g.dist;
+		}
+	}
+	//MaxIndexHeap heap(g);
+	//max=heap.removemax();
+	std::vector<Object> pathofvalue(objectMap.size());
+	//MaxIndexHeap heap(g);//MaxIndexHeap定义比较方式
+	struct CustomCompare
+   {
+      bool operator()(const Object& a,const Object& b)
+      {
+         return a.money>b.money;
+      }
+   };
+   std::priority_queue<Object, std::vector<Object>, CustomCompare> heap;
+   for(auto good:objectMap){
+      heap.push(good.second);
+   }
+	
+
+	for(int i=0;i<objectMap.size();i++){
+		Object target=heap.top();
+      heap.pop();
+		pathofvalue.push_back(target);
+	}
+	for(int i=0;i<pathofvalue.size();i++){
+		if(b.velocity<=2||b.time>=600){
+			if(pathofvalue[i].dist<=max*0.45&&pathofvalue[i].berthid==b.id){
+			
+				b.path_of_move.push_back(std::make_pair(pathofvalue[i].x,pathofvalue[i].y));//链表
+			
+			}
+			continue;
+		}
+		if(pathofvalue[i].dist<=max*0.6&&pathofvalue[i].berthid==b.id){
+			
+			b.path_of_move.push_back(std::make_pair(pathofvalue[i].x,pathofvalue[i].y));//链表
+			
+		}
+	}
+   }
+   
+   
+}
+
+bool PortManager::isValid(int x, int y) {
+   std::vector<std::vector<Element>>&grid=map.grid;
+    return x >= 0 && x < grid.size() && y >= 0 && y < grid[0].size() && grid[x][y].type != '#';
+}
+
+std::vector<MobileEquipment> PortManager::bfs( MobileEquipment start, MobileEquipment end) {
+   std::vector<std::vector<Element>>&grid=map.grid;
+    std::vector<std::vector<bool>> visited(grid.size(), std::vector<bool>(grid[0].size(), false));//访问标记
+    std::queue<MobileEquipment> q;
+    std::vector<MobileEquipment> path;//路径
+    std::map<std::pair<int, int>, std::pair<int, int>> parent;//节点的上一个节点
+    std::vector<std::pair<int, int>> directions{{-1, 0}, {1, 0}, {0, -1}, {0, 1}};//上下左右
+
+    q.push(start);
+    visited[start.x][start.y] = true;
+    parent[{start.x, start.y}] = {-1, -1};
+
+    while (!q.empty()) {
+        MobileEquipment current = q.front();
+        q.pop();
+
+        if (current.x == end.x && current.y == end.y) {
+            
+            std::pair<int, int> cur = {end.x, end.y};
+            while (cur.first != -1) {
+                path.push_back(MobileEquipment(cur.first, cur.second));
+                cur = parent[cur];
+            }
+            reverse(path.begin(), path.end());
+            return path;
+        }
+
+        for (auto dir : directions) {
+            int newX = current.x + dir.first;
+            int newY = current.y + dir.second;
+
+            if (isValid(newX, newY) && !visited[newX][newY]) {
+                q.push(MobileEquipment(newX, newY));
+                visited[newX][newY] = true;
+                parent[{newX, newY}] = {current.x, current.y};//其前一个节点只能是上一层（无障碍）或左右（有障碍）
+            }
+        }
+    }
+
+    return {}; 
+}
+void PortManager::all_path(std::queue<Object>&goods){
+   for(int j=0;j<berthVector.size();j++){
+      for(int i=0;i<goods.size();i++){
+      Object good=goods.front();
+      goods.pop();
+		std::vector<MobileEquipment>path=bfs(MobileEquipment(berthVector[j].x,berthVector[j].y),MobileEquipment(good.x,good.y));
+		berthVector[j].pathofgood.insert(std::make_pair(std::make_pair(good.x,good.y),path));
+		berthVector[j].distofgood.insert(std::make_pair(std::make_pair(good.x,good.y),path.size()-1));
+	}
+   }
+
 }
