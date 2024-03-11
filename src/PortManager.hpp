@@ -11,9 +11,11 @@
 #include <unordered_map>
 #include <mutex>
 #include <unistd.h>
-#include <random>
-#include <chrono>
-#include "PairHash.hpp"
+#include"PairHash.hpp"
+#include <utility>
+#include <algorithm> // std::shuffle
+#include <random>    // std::default_random_engine
+#include <chrono> 
 // 管理地图，船，泊位，机器人的类
 class PortManager
 {
@@ -21,7 +23,7 @@ class PortManager
 public:
    struct Compare
    {
-      bool operator()(const Object &a, const Object &b) const
+      bool operator()(const Object& a,const Object& b)const
       {
          double ratio1 = a.money / a.dist;
          double ratio2 = b.money / b.dist;
@@ -341,18 +343,22 @@ bool PortManager::isValid(int x, int y)
    return x >= 0 && x < grid.size() && y >= 0 && y < grid[0].size() && grid[x][y].type != '#';
 }
 
-std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquipment end)
-{
-   std::vector<std::vector<Element>> &grid = map.grid;
-   std::vector<std::vector<bool>> visited(grid.size(), std::vector<bool>(grid[0].size(), false)); // 访问标记
-   std::queue<MobileEquipment> q;
-   std::vector<MobileEquipment> path;                                             // 路径
-   std::map<std::pair<int, int>, std::pair<int, int>> parent;                     // 节点的上一个节点
-   std::vector<std::pair<int, int>> directions{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // 上下左右
+std::vector<MobileEquipment> PortManager::bfs( MobileEquipment start, MobileEquipment end) {
+   std::vector<std::vector<Element>>&grid=map.grid;
+    std::vector<std::vector<bool>> visited(grid.size(), std::vector<bool>(grid[0].size(), false));//访问标记
+    std::queue<MobileEquipment> q;
+    std::vector<MobileEquipment> path;//路径
+    std::map<std::pair<int, int>, std::pair<int, int>> parent;//节点的上一个节点
+    std::vector<std::pair<int, int>> directions{{-1, 0}, {1, 0}, {0, -1}, {0, 1}};//上下左右
+   
+   unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+   std::default_random_engine engine(seed);
 
-   q.push(start);
-   visited[start.x][start.y] = true;
-   parent[{start.x, start.y}] = {-1, -1};
+    // 打乱directions数组
+    std::shuffle(directions.begin(), directions.end(), engine);
+    q.push(start);
+    visited[start.x][start.y] = true;
+    parent[{start.x, start.y}] = {-1, -1};
 
    while (!q.empty())
    {
