@@ -58,7 +58,7 @@ public:
    int thread_status = 1;
    int c;
 
-   std::queue<Object> objectQueue;
+   std::vector<Object> objectQueue;
    std::vector<Berth> berthVector;                                       // 管理泊位的数组,索引就是泊位id
    std::vector<Ship> shipVector, rt_shipVector;                          // 船的数组,索引就是船的id
    std::vector<Robot> robotVector, rt_robotVector;                       // 机器人的数组，索引就是机器人id
@@ -77,10 +77,10 @@ public:
    void initData();                     // 从标准输入初始化数据
    int readFrame();                     // 从一帧中读取数据
    void outputFrame();                  // 输出一帧..
-   void cal_path_of_maxvalue(Berth &b); // 每个泊位对应的搬运队列
+   void cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods); // 每个泊位对应的搬运队列
    bool isValid(int x, int y);
    std::vector<MobileEquipment> bfs(MobileEquipment start, MobileEquipment end);
-   void all_goods_path(std::queue<Object> &goods);
+   void all_goods_path(std::vector<Object> &goods);
    void all_path();
    void deleteObject();
    bool setdist(Object &g, Berth &b);
@@ -139,7 +139,7 @@ int PortManager::readFrame()
    {
       int x, y, val;
       scanf("%d%d%d", &x, &y, &val);
-      objectQueue.push(Object(x, y, val, frameId + 1000));
+      objectQueue.push_back(Object(x, y, val, frameId + 1000));
       deleteQueue.push(Object(x, y, val, frameId + 1000));
       objectMap.insert(std::make_pair(std::make_pair(x, y), Object(x, y, val, frameId + 1000)));
    }
@@ -185,7 +185,7 @@ int PortManager::readFrame()
    {
       for (int i = 0; i < 10; i += 2)
       {
-         cal_path_of_maxvalue(berthVector[i]);
+         cal_path_of_maxvalue(berthVector[i],objectQueue);
       }
    }
 
@@ -293,14 +293,14 @@ bool PortManager::setdist(Object &g, Berth &b)
    }
    return false;
 }
-void PortManager::cal_path_of_maxvalue(Berth &b)
+void PortManager::cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods)
 { // 传入货物数组
    path_of_move[b.id].clear();
    int max = 0;
 
-   for (auto &good : objectMap)
+   for (int i=0;i<goods.size();i++)
    {
-      Object &g = good.second;
+      Object &g = goods[i];
       int id = g.berthid;
       if (setdist(g, b) && id >= 0)
       {
@@ -308,9 +308,9 @@ void PortManager::cal_path_of_maxvalue(Berth &b)
          path_of_move[id].erase(g);
       }
    }
-   for (auto &good : objectMap)
+   for (int i=0;i<goods.size();i++)
    {
-      Object &g = good.second;
+      Object &g = goods[i];
       if (g.dist > max)
       {
          max = g.dist;
@@ -318,17 +318,17 @@ void PortManager::cal_path_of_maxvalue(Berth &b)
    }
    // MaxIndexHeap heap(g);
    // max=heap.removemax();
-   std::vector<Object> pathofvalue(objectMap.size());
+   std::vector<Object> pathofvalue(goods.size());
    // MaxIndexHeap heap(g);//MaxIndexHeap定义比较方式
 
    std::priority_queue<Object, std::vector<Object>, CustomCompare> heap;
-   for (auto &g : objectMap)
+   for (int i=0;i<goods.size();i++)
    {
-      Object good = g.second;
+      Object good = goods[i];
       heap.push(good);
    }
 
-   for (int i = 0; i < objectMap.size(); i++)
+   for (int i = 0; i < goods.size(); i++)
    {
       Object target = heap.top();
       heap.pop();
@@ -351,6 +351,7 @@ void PortManager::cal_path_of_maxvalue(Berth &b)
          path_of_move[b.id].insert(pathofvalue[i]); // 链表
       }
    }
+   goods.clear();
 }
 
 bool PortManager::isValid(int x, int y)
@@ -411,14 +412,13 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
 
    return {};
 }
-void PortManager::all_goods_path(std::queue<Object> &goods)
+void PortManager::all_goods_path(std::vector<Object> &goods)
 {
    for (int j = 0; j < berthVector.size(); j++)
    {
       for (int i = 0; i < goods.size(); i++)
       {
-         Object good = goods.front();
-         goods.pop();
+         Object good = goods[i];
          std::vector<MobileEquipment> path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(good.x, good.y));
          pathofgood[j].insert(std::make_pair(std::make_pair(good.x, good.y), path));
          distogood[j].insert(std::make_pair(std::make_pair(good.x, good.y), path.size() - 1)); //
