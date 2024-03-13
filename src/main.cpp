@@ -2,11 +2,11 @@
 #include"Map.hpp"
 #include"PortManager.hpp"
 using namespace std;
-PortManager p;
+
 int main()
 {
 
-
-    p.run();
+    PortManager *p=new PortManager;
+    p->run();
     return 0;
 }
