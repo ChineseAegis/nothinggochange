@@ -367,7 +367,19 @@ void PortManager::cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods)
 bool PortManager::isValid(int x, int y,int frameId)
 {
    std::vector<std::vector<Element>> &grid = map.grid;
-   return x >= 0 && x < grid.size() && y >= 0 && y < grid[0].size() && grid[x][y].type != '#' && grid[x][y].type != '*'&&robotLocation[frameId].find(std::make_pair(x,y))==robotLocation[frameId].end();
+   // if(robotLocation[frameId].find(std::make_pair(x,y))!=robotLocation[frameId].end())
+   // {
+   //   std::cerr<<"test"<<std::endl;
+   // }
+   bool isRobot=0;
+   for(int i=0;i<6;i++)
+   {
+      if(robotLocation[frameId-i].find(std::make_pair(x,y))!=robotLocation[frameId-i].end())
+      {
+         isRobot=1;
+      }
+   }
+   return x >= 0 && x < grid.size() && y >= 0 && y < grid[0].size() && grid[x][y].type != '#' && grid[x][y].type != '*'&&!isRobot;
 }
 
 std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquipment end)
