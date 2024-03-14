@@ -4,6 +4,8 @@
 #include <deque>
 #include <string>
 #include <vector>
+#include<unordered_map>
+#include<PairHash.hpp>
 class Robot : public MobileEquipment
 {
 public:
@@ -22,8 +24,9 @@ public:
   Robot()
   {
   }
-  bool handlePath(const std::vector<MobileEquipment> &path, int id)
+  bool handlePath(const std::vector<MobileEquipment> &path, int id,std::unordered_map<int,std::unordered_map<std::pair<int, int>,bool,pair_hash>>& umap,int frameId)
   {
+    
     std::string sId = std::to_string(id);
     if(path.size()>0)
     {
@@ -49,6 +52,7 @@ public:
     for (int i = 1; i < path.size(); i++)
     {
       mInstructionQueue.push_back(path[i]);
+      umap[frameId+i].insert(std::make_pair(std::make_pair(path[i].x,path[i].y),true));
     }
     }
 

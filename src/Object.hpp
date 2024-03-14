@@ -9,7 +9,7 @@ class Object : public MobileEquipment
 public:
   int money;
   int dist = std::numeric_limits<int>::max();
-  int berthid;
+  int berthid=-1;
   int disappearFrame;
   Object(int x, int y, int money,int disappearFrame) : MobileEquipment(x, y), money(money),disappearFrame(disappearFrame)
   {

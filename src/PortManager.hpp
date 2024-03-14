@@ -64,6 +64,7 @@ public:
    std::vector<Robot> robotVector, rt_robotVector;                       // 机器人的数组，索引就是机器人id
    std::unordered_map<std::pair<int, int>, Object, pair_hash> objectMap; // 存储物品的哈希表，键值是坐标。
    std::queue<Object> deleteQueue;                                       // 消失物品的队列
+   std::unordered_map<int,std::unordered_map<std::pair<int, int>,bool,pair_hash>> robotLocation;
 
    // std::priority_queue<InstructQueue,std::vector<InstructQueue>,CompareInstructQueue> instruction;//指令队列，存储所有指令，注意，队列元素是队列，元素队列中才存储指令
    std::queue<std::string> robotInstruction; // 管理机器人指令的队列，不要往这个队列插入机器人的move指令
@@ -78,7 +79,7 @@ public:
    int readFrame();                     // 从一帧中读取数据
    void outputFrame();                  // 输出一帧..
    void cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods); // 每个泊位对应的搬运队列
-   bool isValid(int x, int y);
+   bool isValid(int x, int y,int frameId);
    std::vector<MobileEquipment> bfs(MobileEquipment start, MobileEquipment end);
    void all_goods_path(std::vector<Object> &goods);
    void all_path();
@@ -180,13 +181,17 @@ int PortManager::readFrame()
    char okk[100];
    scanf("%s", okk);
    deleteObject();
-   all_goods_path(objectQueue);
-   if (num != 0)
+   if(objectQueue.size())
    {
+   all_goods_path(objectQueue);
+
       for (int i = 0; i < 10; i += 2)
       {
+         
          cal_path_of_maxvalue(berthVector[i],objectQueue);
       }
+     objectQueue.clear();
+   
    }
 
    return frameId;
@@ -238,6 +243,9 @@ void PortManager::deleteObject()
       objectMap.erase(std::make_pair(deleteQueue.front().x, deleteQueue.front().y));
       deleteQueue.pop();
    }
+   robotLocation.erase(frameId);
+
+
 }
 void PortManager::run()
 {
@@ -283,7 +291,7 @@ void PortManager::run()
 bool PortManager::setdist(Object &g, Berth &b)
 { // 计算该货物到某泊位的距离并赋值
    int distance = ((g.x - b.x) * (g.x - b.x) + (g.y - b.y) * (g.y - b.y));
-   // int distance = distogood[b.id].at(std::make_pair(g.x, g.y));
+    //int distance = distogood[b.id].at(std::make_pair(g.x, g.y));
    // int distance=10;
    if (distance < g.dist)
    {
@@ -295,19 +303,21 @@ bool PortManager::setdist(Object &g, Berth &b)
 }
 void PortManager::cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods)
 { // 传入货物数组
-   path_of_move[b.id].clear();
+   //path_of_move[b.id].clear();
    int max = 0;
 
    for (int i=0;i<goods.size();i++)
    {
       Object &g = goods[i];
       int id = g.berthid;
-      if (setdist(g, b) && id >= 0)
+      
+      if (setdist(g, b) && id >= 0&&id!=-1)
       {
-
          path_of_move[id].erase(g);
       }
+
    }
+
    for (int i=0;i<goods.size();i++)
    {
       Object &g = goods[i];
@@ -351,13 +361,13 @@ void PortManager::cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods)
          path_of_move[b.id].insert(pathofvalue[i]); // 链表
       }
    }
-   goods.clear();
+
 }
 
-bool PortManager::isValid(int x, int y)
+bool PortManager::isValid(int x, int y,int frameId)
 {
    std::vector<std::vector<Element>> &grid = map.grid;
-   return x >= 0 && x < grid.size() && y >= 0 && y < grid[0].size() && grid[x][y].type != '#' && grid[x][y].type != '*';
+   return x >= 0 && x < grid.size() && y >= 0 && y < grid[0].size() && grid[x][y].type != '#' && grid[x][y].type != '*'&&robotLocation[frameId].find(std::make_pair(x,y))==robotLocation[frameId].end();
 }
 
 std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquipment end)
@@ -456,7 +466,7 @@ void PortManager::moveRobot(int id, std::pair<int, int> destination)
    
    std::vector<MobileEquipment> path = bfs(MobileEquipment(robotVector[id].x, robotVector[id].y), MobileEquipment(destination.first, destination.second));
    
-   robotVector[id].handlePath(path, id);
+   robotVector[id].handlePath(path, id,robotLocation,frameId);
    robotVector[id].destination = destination;
    
 }
@@ -645,6 +655,7 @@ void PortManager::checkRobot()
    {
       if (shipVector[i].berthId == -1 && shipVector[i].status != 0)
       {
+         //std::cerr<<"test"<<std::endl;
          shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string(shipVector[i].myBerthId));
       }
    }
