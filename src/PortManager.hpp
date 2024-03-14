@@ -378,7 +378,8 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
    std::vector<MobileEquipment> path;                                             // 路径
    std::map<std::pair<int, int>, std::pair<int, int>> parent;                     // 节点的上一个节点
    std::vector<std::pair<int, int>> directions{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // 上下左右
-
+   bool isreturn=true;
+   int step=0;
    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
    std::default_random_engine engine(seed);
 
@@ -387,12 +388,15 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
    q.push(start);
    visited[start.x][start.y] = true;
    parent[{start.x, start.y}] = {-1, -1};
-
+   int counter=frameId;
    while (!q.empty())
    {
       MobileEquipment current = q.front();
       q.pop();
-
+      if(isreturn){
+         counter-=step;
+         step=0;
+      }
       if (current.x == end.x && current.y == end.y)
       {
 
@@ -405,18 +409,20 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
          reverse(path.begin(), path.end());
          return path;
       }
-
+      counter++;
+      step++;
       for (auto dir : directions)
       {
          int newX = current.x + dir.first;
          int newY = current.y + dir.second;
-
-         if (isValid(newX, newY) && !visited[newX][newY])
+         if (isValid(newX, newY,counter) && !visited[newX][newY])
          {
+            isreturn=false;
             q.push(MobileEquipment(newX, newY));
             visited[newX][newY] = true;
             parent[{newX, newY}] = {current.x, current.y}; // 其前一个节点只能是上一层（无障碍）或左右（有障碍）
          }
+
       }
    }
 
@@ -616,7 +622,7 @@ void PortManager::checkRobot()
                         break;
                      }
                   }
-                  if (objectMap.find(std::make_pair(o.x, o.y)) != objectMap.end()&&isValid(o.x,o.y))
+                  if (objectMap.find(std::make_pair(o.x, o.y)) != objectMap.end())
                   {
                      //std::cerr<<o.x<<" "<<o.y<<std::endl;
                      moveRobot(i, std::make_pair(o.x, o.y));
