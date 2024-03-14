@@ -391,7 +391,8 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
    std::map<std::pair<int, int>, std::pair<int, int>> parent;                     // 节点的上一个节点
    std::vector<std::pair<int, int>> directions{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // 上下左右
    bool isreturn=true;
-   int step=0;
+   
+   MobileEquipment unvailed(-1,-1);
    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
    std::default_random_engine engine(seed);
 
@@ -405,9 +406,12 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
    {
       MobileEquipment current = q.front();
       q.pop();
-      if(isreturn){
-         counter-=step;
-         step=0;
+      if(isreturn&&unvailed.x!=-1&&unvailed.y!=-1){
+         std::cerr<<"test"<<std::endl;
+         std::pair<int,int> parent_of_current=parent.at(std::make_pair(current.x,current.y));
+         if(abs(unvailed.x-parent_of_current.first)>0)counter-=abs(unvailed.x-parent_of_current.first);
+         if(abs(unvailed.y-parent_of_current.second)>0)counter-=abs(unvailed.y-parent_of_current.second);
+         counter--;
       }
       if (current.x == end.x && current.y == end.y)
       {
@@ -422,9 +426,10 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
          return path;
       }
       counter++;
-      step++;
+      isreturn=true;
       for (auto dir : directions)
       {
+         
          int newX = current.x + dir.first;
          int newY = current.y + dir.second;
          if (isValid(newX, newY,counter) && !visited[newX][newY])
@@ -435,6 +440,9 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
             parent[{newX, newY}] = {current.x, current.y}; // 其前一个节点只能是上一层（无障碍）或左右（有障碍）
          }
 
+      }
+      if(isreturn){
+         unvailed=current;
       }
    }
 
