@@ -16,7 +16,10 @@
 #include <algorithm> // std::shuffle
 #include <random>    // std::default_random_engine
 #include <chrono>
-// 管理地图，船，泊位，机器人的类
+// #include <algorithm>
+// #include <execution>
+// #include <utility> // for std::pair
+//  管理地图，船，泊位，机器人的类
 class PortManager
 {
 
@@ -25,9 +28,10 @@ public:
    {
       bool operator()(const Object &a, const Object &b) const
       {
-         double ratio1 = a.money / a.dist;
-         double ratio2 = b.money / b.dist;
-         return ratio1 > ratio2;
+         double ratio1 = static_cast<double>(a.money) / a.dist;
+         // double ratio1 = a.money / a.dist;
+         double ratio2 = static_cast<double>(b.money) / b.dist;
+         return ratio1 < ratio2;
       }
    };
    struct CustomCompare
@@ -64,7 +68,7 @@ public:
    std::vector<Robot> robotVector, rt_robotVector;                       // 机器人的数组，索引就是机器人id
    std::unordered_map<std::pair<int, int>, Object, pair_hash> objectMap; // 存储物品的哈希表，键值是坐标。
    std::queue<Object> deleteQueue;                                       // 消失物品的队列
-   std::unordered_map<int,std::unordered_map<std::pair<int, int>,bool,pair_hash>> robotLocation;
+   std::unordered_map<int, std::unordered_map<std::pair<int, int>, bool, pair_hash>> robotLocation;
 
    // std::priority_queue<InstructQueue,std::vector<InstructQueue>,CompareInstructQueue> instruction;//指令队列，存储所有指令，注意，队列元素是队列，元素队列中才存储指令
    std::queue<std::string> robotInstruction; // 管理机器人指令的队列，不要往这个队列插入机器人的move指令
@@ -74,18 +78,18 @@ public:
    std::vector<std::unordered_map<std::pair<int, int>, int, pair_hash>> distogood;
 
    void input();
-   void run();                          // 主函数，在main中调用这个函数
-   void initData();                     // 从标准输入初始化数据
-   int readFrame();                     // 从一帧中读取数据
-   void outputFrame();                  // 输出一帧..
-   void cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods); // 每个泊位对应的搬运队列
-   bool isValid(int x, int y,int frameId);
+   void run();                                                      // 主函数，在main中调用这个函数
+   void initData();                                                 // 从标准输入初始化数据
+   int readFrame();                                                 // 从一帧中读取数据
+   void outputFrame();                                              // 输出一帧..
+   void cal_path_of_maxvalue(Berth &b, std::vector<Object> &goods); // 每个泊位对应的搬运队列
+   bool isValid(int x, int y, int frameId);
    std::vector<MobileEquipment> bfs(MobileEquipment start, MobileEquipment end);
    void all_goods_path(std::vector<Object> &goods);
    void all_path();
    void deleteObject();
    bool setdist(Object &g, Berth &b);
-   void moveRobot(int id, std::pair<int, int> destination);
+   bool moveRobot(int id, std::pair<int, int> destination, bool changeDestination = true);
    void robotGet(int id);  // 延迟指令，不是实时生效的，可能要等机器人move到目的地后才生效
    void robotPull(int id); // 延迟指令，不是实时生效的，可能要等机器人move到目的地后才生效
    void insert_robot_move_instructions();
@@ -94,6 +98,7 @@ public:
    void checkRobot();
    void initRobotAndShip();
    void distributeObject();
+   void processBerth(size_t j);
 };
 
 void PortManager::initData()
@@ -181,17 +186,16 @@ int PortManager::readFrame()
    char okk[100];
    scanf("%s", okk);
    deleteObject();
-   if(objectQueue.size())
+   if (objectQueue.size())
    {
-   all_goods_path(objectQueue);
+      all_goods_path(objectQueue);
 
       for (int i = 0; i < 10; i += 2)
       {
-         
-         cal_path_of_maxvalue(berthVector[i],objectQueue);
+
+         cal_path_of_maxvalue(berthVector[i], objectQueue);
       }
-     objectQueue.clear();
-   
+      objectQueue.clear();
    }
 
    return frameId;
@@ -243,9 +247,7 @@ void PortManager::deleteObject()
       objectMap.erase(std::make_pair(deleteQueue.front().x, deleteQueue.front().y));
       deleteQueue.pop();
    }
-   robotLocation.erase(frameId);
-
-
+   // robotLocation.erase(frameId);
 }
 void PortManager::run()
 {
@@ -290,8 +292,17 @@ void PortManager::run()
 }
 bool PortManager::setdist(Object &g, Berth &b)
 { // 计算该货物到某泊位的距离并赋值
-   int distance = ((g.x - b.x) * (g.x - b.x) + (g.y - b.y) * (g.y - b.y));
-    //int distance = distogood[b.id].at(std::make_pair(g.x, g.y));
+   // int distance = ((g.x - b.x) * (g.x - b.x) + (g.y - b.y) * (g.y - b.y));
+   int distance;
+   if (distogood[b.id].find(std::make_pair(g.x, g.y)) != distogood[b.id].end())
+   {
+      distance = distogood[b.id].at(std::make_pair(g.x, g.y));
+   }
+   else
+   {
+      distance = std::numeric_limits<int>::max();
+   }
+
    // int distance=10;
    if (distance < g.dist)
    {
@@ -301,24 +312,23 @@ bool PortManager::setdist(Object &g, Berth &b)
    }
    return false;
 }
-void PortManager::cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods)
+void PortManager::cal_path_of_maxvalue(Berth &b, std::vector<Object> &goods)
 { // 传入货物数组
-   //path_of_move[b.id].clear();
+   // path_of_move[b.id].clear();
    int max = 0;
 
-   for (int i=0;i<goods.size();i++)
+   for (int i = 0; i < goods.size(); i++)
    {
       Object &g = goods[i];
       int id = g.berthid;
-      
-      if (setdist(g, b) && id >= 0&&id!=-1)
+
+      if (setdist(g, b) && id >= 0 && id != -1)
       {
          path_of_move[id].erase(g);
       }
-
    }
 
-   for (int i=0;i<goods.size();i++)
+   for (int i = 0; i < goods.size(); i++)
    {
       Object &g = goods[i];
       if (g.dist > max)
@@ -328,58 +338,70 @@ void PortManager::cal_path_of_maxvalue(Berth &b,std::vector<Object> &goods)
    }
    // MaxIndexHeap heap(g);
    // max=heap.removemax();
-   std::vector<Object> pathofvalue(goods.size());
+   // std::vector<Object> pathofvalue;
    // MaxIndexHeap heap(g);//MaxIndexHeap定义比较方式
 
-   std::priority_queue<Object, std::vector<Object>, CustomCompare> heap;
-   for (int i=0;i<goods.size();i++)
-   {
-      Object good = goods[i];
-      heap.push(good);
-   }
+   // std::priority_queue<Object, std::vector<Object>, CustomCompare> heap;
+   //  for (int i = 0; i < goods.size(); i++)
+   //  {
+   //     if (goods[i].berthid == b.id)
+   //     {
+   //        Object good = goods[i];
+   //        heap.push(good);
+   //     }
+   //  }
 
+   // while (!heap.empty())
+   // {
+   //    Object target = heap.top();
+   //    heap.pop();
+   //    // pathofvalue.push_back(target);
+   //    pathofvalue.push_back(target);
+   // }
    for (int i = 0; i < goods.size(); i++)
    {
-      Object target = heap.top();
-      heap.pop();
-      // pathofvalue.push_back(target);
-      pathofvalue[i] = target;
-   }
-   for (int i = 0; i < pathofvalue.size(); i++)
-   {
-      if (b.velocity <= 2 || b.time >= 1200)
-      {
-         if (pathofvalue[i].dist <= max && pathofvalue[i].berthid == b.id)
-         {
-            // std::cerr<<"test ";
-            path_of_move[b.id].insert(pathofvalue[i]); // 链表
-         }
-      }
-      else if (pathofvalue[i].dist <= max && pathofvalue[i].berthid == b.id)
+      if (goods[i].berthid == b.id)
       {
          // std::cerr<<"test ";
-         path_of_move[b.id].insert(pathofvalue[i]); // 链表
+         path_of_move[b.id].insert(goods[i]); // 链表
       }
    }
-
 }
 
-bool PortManager::isValid(int x, int y,int frameId)
+bool PortManager::isValid(int x, int y, int frameId)
 {
    std::vector<std::vector<Element>> &grid = map.grid;
    // if(robotLocation[frameId].find(std::make_pair(x,y))!=robotLocation[frameId].end())
    // {
    //   std::cerr<<"test"<<std::endl;
    // }
-   bool isRobot=0;
-   for(int i=0;i<6;i++)
-   {
-      if(robotLocation[frameId-i].find(std::make_pair(x,y))!=robotLocation[frameId-i].end())
-      {
-         isRobot=1;
-      }
-   }
-   return x >= 0 && x < grid.size() && y >= 0 && y < grid[0].size() && grid[x][y].type != '#' && grid[x][y].type != '*'&&!isRobot;
+   bool isRobot = 0;
+   // for (int i = 0; i < 3; i++)
+   // {
+   //    for (int j = 0; j < 2; j++)
+   //    {
+   //       if (robotLocation[frameId - i].find(std::make_pair(x + j, y)) != robotLocation[frameId - i].end() && robotLocation[frameId - i].find(std::make_pair(x - j, y)) != robotLocation[frameId - i].end() &&
+   //           robotLocation[frameId - i].find(std::make_pair(x, y + j)) != robotLocation[frameId - i].end() && robotLocation[frameId - i].find(std::make_pair(x + j, y + j)) != robotLocation[frameId - i].end() &&
+   //           robotLocation[frameId - i].find(std::make_pair(x - j, y + j)) != robotLocation[frameId - i].end())
+   //       {
+   //          isRobot = 1;
+   //       }
+   //    }
+   // }
+   // for (int i = 0; i < 3; i++)
+   // {
+   //    for (int j = 0; j < 2; j++)
+   //    {
+   //       if (robotLocation[frameId - i].find(std::make_pair(x + j, y)) != robotLocation[frameId - i].end() && robotLocation[frameId - i].find(std::make_pair(x - j, y)) != robotLocation[frameId - i].end() &&
+   //           robotLocation[frameId - i].find(std::make_pair(x, y + j)) != robotLocation[frameId - i].end() && robotLocation[frameId - i].find(std::make_pair(x + j, y + j)) != robotLocation[frameId - i].end() &&
+   //           robotLocation[frameId - i].find(std::make_pair(x - j, y + j)) != robotLocation[frameId - i].end())
+   //       {
+   //          isRobot = 1;
+   //       }
+   //    }
+   // }
+
+   return x >= 0 && x < grid.size() && y >= 0 && y < grid[0].size() && grid[x][y].type != '#' && grid[x][y].type != '*' && !isRobot;
 }
 
 std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquipment end)
@@ -390,9 +412,9 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
    std::vector<MobileEquipment> path;                                             // 路径
    std::map<std::pair<int, int>, std::pair<int, int>> parent;                     // 节点的上一个节点
    std::vector<std::pair<int, int>> directions{{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // 上下左右
-   bool isreturn=true;
-   
-   MobileEquipment unvailed(-1,-1);
+   bool isreturn = true;
+
+   MobileEquipment unvailed(-1, -1);
    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
    std::default_random_engine engine(seed);
 
@@ -401,18 +423,21 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
    q.push(start);
    visited[start.x][start.y] = true;
    parent[{start.x, start.y}] = {-1, -1};
-   int counter=frameId;
+   int counter = frameId;
    while (!q.empty())
    {
       MobileEquipment current = q.front();
       q.pop();
-      if(isreturn&&unvailed.x!=-1&&unvailed.y!=-1){
-         std::cerr<<"test"<<std::endl;
-         std::pair<int,int> parent_of_current=parent.at(std::make_pair(current.x,current.y));
-         if(abs(unvailed.x-parent_of_current.first)>0)counter-=abs(unvailed.x-parent_of_current.first);
-         if(abs(unvailed.y-parent_of_current.second)>0)counter-=abs(unvailed.y-parent_of_current.second);
-         counter--;
-      }
+      // if (isreturn && unvailed.x != -1 && unvailed.y != -1)
+      // {
+      //    // std::cerr<<"test"<<std::endl;
+      //    std::pair<int, int> parent_of_current = parent.at(std::make_pair(current.x, current.y));
+      //    if (abs(unvailed.x - parent_of_current.first) > 0)
+      //       counter -= abs(unvailed.x - parent_of_current.first);
+      //    if (abs(unvailed.y - parent_of_current.second) > 0)
+      //       counter -= abs(unvailed.y - parent_of_current.second);
+      //    counter--;
+      // }
       if (current.x == end.x && current.y == end.y)
       {
 
@@ -425,39 +450,97 @@ std::vector<MobileEquipment> PortManager::bfs(MobileEquipment start, MobileEquip
          reverse(path.begin(), path.end());
          return path;
       }
-      counter++;
-      isreturn=true;
+      // counter++;
+      // isreturn = true;
       for (auto dir : directions)
       {
-         
+
          int newX = current.x + dir.first;
          int newY = current.y + dir.second;
-         if (isValid(newX, newY,counter) && !visited[newX][newY])
+         if (isValid(newX, newY, counter) && !visited[newX][newY])
          {
-            isreturn=false;
+            // isreturn = false;
             q.push(MobileEquipment(newX, newY));
             visited[newX][newY] = true;
             parent[{newX, newY}] = {current.x, current.y}; // 其前一个节点只能是上一层（无障碍）或左右（有障碍）
          }
-
       }
-      if(isreturn){
-         unvailed=current;
-      }
+      // if (isreturn)
+      // {
+      //    unvailed = current;
+      // }
    }
 
    return {};
 }
 void PortManager::all_goods_path(std::vector<Object> &goods)
 {
-   for (int j = 0; j < berthVector.size(); j++)
+   // for (int j = 0; j < berthVector.size(); j++)
+   // {
+   //    for (int i = 0; i < goods.size(); i++)
+   //    {
+   //       Object good = goods[i];
+   //       std::vector<MobileEquipment> path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(good.x, good.y));
+   //       if(path.size())
+   //       {
+   //       //pathofgood[j].insert(std::make_pair(std::make_pair(good.x, good.y), path));
+   //       distogood[j].insert(std::make_pair(std::make_pair(good.x, good.y), path.size() - 1)); //
+   //       }
+   //    }
+   // }
+   // std::vector<std::mutex> locks(distogood.size()); // 为每个distogood元素提供一个锁
+
+   // std::vector<std::mutex> locks(distogood.size()); // 为每个distogood元素提供一个锁
+   std::vector<std::thread> outerThreads;
+
+   for (size_t j = 0; j < berthVector.size(); ++j)
    {
-      for (int i = 0; i < goods.size(); i++)
+      outerThreads.push_back(std::thread([&, j]
+                                         {
+        std::vector<std::thread> innerThreads;
+
+        for (size_t i = 0; i < goods.size(); ++i) {
+            innerThreads.push_back(std::thread([&, j, i] {
+                // 这里执行BFS
+                auto path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(goods[i].x, goods[i].y));
+                if (!path.empty()) {
+                    m.lock();
+                    distogood[j].insert(std::make_pair(std::make_pair(goods[i].x, goods[i].y), path.size() - 1));
+                    m.unlock();
+                }
+            }));
+        }
+
+        // 等待内层所有线程完成
+        for (auto &innerThread : innerThreads) {
+            if (innerThread.joinable()) {
+                innerThread.join();
+            }
+        } }));
+   }
+
+   // 等待外层所有线程完成
+   for (auto &outerThread : outerThreads)
+   {
+      if (outerThread.joinable())
       {
-         Object good = goods[i];
-         std::vector<MobileEquipment> path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(good.x, good.y));
-         pathofgood[j].insert(std::make_pair(std::make_pair(good.x, good.y), path));
-         distogood[j].insert(std::make_pair(std::make_pair(good.x, good.y), path.size() - 1)); //
+         outerThread.join();
+      }
+   }
+}
+void PortManager::processBerth(size_t j)
+{
+   for (size_t i = 0; i < objectQueue.size(); ++i)
+   {
+      // 直接在这里执行BFS可能不是最高效的，并行化应该在有大量计算时才会带来好处
+      // 如果BFS很快，那么创建和管理线程的开销可能会超过其带来的好处
+      auto path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(objectQueue[i].x, objectQueue[i].y));
+      if (!path.empty())
+      {
+         // std::lock_guard<std::mutex> lock(locks[j]);
+         m.lock();
+         distogood[j].insert(std::make_pair(std::make_pair(objectQueue[i].x, objectQueue[i].y), path.size() - 1));
+         m.unlock();
       }
    }
 }
@@ -477,7 +560,7 @@ void PortManager::all_path()
    }
 }
 
-void PortManager::moveRobot(int id, std::pair<int, int> destination)
+bool PortManager::moveRobot(int id, std::pair<int, int> destination, bool changeDestination)
 {
    // for (int i = 0; i < berth_num; i++)
    // {
@@ -489,12 +572,21 @@ void PortManager::moveRobot(int id, std::pair<int, int> destination)
    //       return;
    //    }
    // }
-   
+
    std::vector<MobileEquipment> path = bfs(MobileEquipment(robotVector[id].x, robotVector[id].y), MobileEquipment(destination.first, destination.second));
-   
-   robotVector[id].handlePath(path, id,robotLocation,frameId);
-   robotVector[id].destination = destination;
-   
+   if (path.size() == 0)
+   {
+      return false;
+   }
+   else
+   {
+      robotVector[id].handlePath(path, id, robotLocation, frameId);
+      if (changeDestination)
+      {
+         robotVector[id].destination = destination;
+      }
+      return true;
+   }
 }
 void PortManager::robotGet(int id)
 {
@@ -509,22 +601,114 @@ void PortManager::robotPull(int id)
 
 void PortManager::insert_robot_move_instructions()
 {
-   // std::unordered_map<std::pair<int, int>, Robot, pair_hash> map;
-   // for (int i = 0; i < robot_num; i++)
-   // {
-   //    auto it = map.find(std::make_pair(robotVector[i].mInstructionQueue.front().x, robotVector[i].mInstructionQueue.front().y));
-   //    if (it == map.end())
-   //    {
-   //       map.insert(std::make_pair(std::make_pair(robotVector[i].mInstructionQueue.front().x, robotVector[i].mInstructionQueue.front().y), robotVector[i]));
-   //    }
-   //    else
-   //    {
-   //       robotVector[i].instructionQueue.clear();
-   //       robotVector[i].mInstructionQueue.clear();
-   //       robotVector[i].get_pull_instructions.clear();
-   //       active_avoidance(i);
-   //    }
-   // }
+   std::unordered_map<std::pair<int, int>, Robot *, pair_hash> map;
+   for (int i = 0; i < robot_num; i++)
+   {
+
+      map.insert(std::make_pair(std::make_pair(robotVector[i].x, robotVector[i].y), &robotVector[i]));
+   }
+   // std::cerr << "test " << std::endl;
+   for (int i = 0; i < robot_num; i++)
+   {
+      if (!robotVector[i].mInstructionQueue.empty())
+      {
+         auto it = map.find(std::make_pair(robotVector[i].mInstructionQueue.front().x, robotVector[i].mInstructionQueue.front().y));
+         int x = robotVector[i].mInstructionQueue.front().x;
+         int y = robotVector[i].mInstructionQueue.front().y;
+         // std::cerr << robotVector[i].mInstructionQueue.front().x << " " << robotVector[i].mInstructionQueue.front().y << std::endl;
+         bool isRobot = 0;
+
+         if (it == map.end())
+         {
+            map.insert(std::make_pair(std::make_pair(robotVector[i].mInstructionQueue.front().x, robotVector[i].mInstructionQueue.front().y), &robotVector[i]));
+         }
+         else if (it->second->a_status != i)
+         {
+            robotVector[i].instructionQueue.clear();
+            robotVector[i].mInstructionQueue.clear();
+            // robotVector[i].get_pull_instructions.clear();
+            auto left = map.find(std::make_pair(robotVector[i].x - 1, robotVector[i].y));
+            auto right = map.find(std::make_pair(robotVector[i].x + 1, robotVector[i].y));
+            auto up = map.find(std::make_pair(robotVector[i].x, robotVector[i].y - 1));
+            auto down = map.find(std::make_pair(robotVector[i].x, robotVector[i].y + 1));
+            if (x > robotVector[i].x)
+            {
+               if (down == map.end() && moveRobot(i, std::make_pair(robotVector[i].x, robotVector[i].y + 1), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x, robotVector[i].y + 1), &robotVector[i]));
+               }
+               else if (up == map.end() && moveRobot(i, std::make_pair(robotVector[i].x, robotVector[i].y - 1), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x, robotVector[i].y - 1), &robotVector[i]));
+               }
+               else if (left == map.end() && moveRobot(i, std::make_pair(robotVector[i].x - 1, robotVector[i].y), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x - 1, robotVector[i].y), &robotVector[i]));
+               }
+            }
+            else if (x < robotVector[i].x)
+            {
+               if (down == map.end() && moveRobot(i, std::make_pair(robotVector[i].x, robotVector[i].y + 1), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x, robotVector[i].y + 1), &robotVector[i]));
+               }
+               else if (up == map.end() && moveRobot(i, std::make_pair(robotVector[i].x, robotVector[i].y - 1), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x, robotVector[i].y - 1), &robotVector[i]));
+               }
+               else if (right == map.end() && moveRobot(i, std::make_pair(robotVector[i].x + 1, robotVector[i].y), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x + 1, robotVector[i].y), &robotVector[i]));
+               }
+            }
+            else if (y > robotVector[i].y)
+            {
+               if (right == map.end() && moveRobot(i, std::make_pair(robotVector[i].x + 1, robotVector[i].y), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x + 1, robotVector[i].y), &robotVector[i]));
+               }
+               else if (left == map.end() && moveRobot(i, std::make_pair(robotVector[i].x - 1, robotVector[i].y), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x - 1, robotVector[i].y), &robotVector[i]));
+               }
+               else if (up == map.end() && moveRobot(i, std::make_pair(robotVector[i].x, robotVector[i].y - 1), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x, robotVector[i].y - 1), &robotVector[i]));
+               }
+            }
+            else if (y < robotVector[i].y)
+            {
+               if (right == map.end() && moveRobot(i, std::make_pair(robotVector[i].x + 1, robotVector[i].y), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x + 1, robotVector[i].y), &robotVector[i]));
+               }
+               else if (left == map.end() && moveRobot(i, std::make_pair(robotVector[i].x - 1, robotVector[i].y), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x - 1, robotVector[i].y), &robotVector[i]));
+               }
+               else if (down == map.end() && moveRobot(i, std::make_pair(robotVector[i].x, robotVector[i].y + 1), false))
+               {
+                  map.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
+                  map.insert(std::make_pair(std::make_pair(robotVector[i].x, robotVector[i].y + 1), &robotVector[i]));
+               }
+            }
+            // active_avoidance(i);
+            robotVector[i].a_status = it->second->id;
+         }
+      }
+   }
+   // std::cerr << "end" << std::endl;
    for (int i = 0; i < robot_num; i++)
    {
       if (!robotVector[i].get_pull_instructions.empty())
@@ -532,14 +716,15 @@ void PortManager::insert_robot_move_instructions()
          robotInstruction.push(robotVector[i].get_pull_instructions.front());
          robotVector[i].get_pull_instructions.pop_front();
       }
-      if (robotVector[i].status == 0 && robotVector[i].a_status == 0)
+      if (robotVector[i].status == 0 && robotVector[i].a_status >= 0)
       {
          robotVector[i].instructionQueue.clear();
          robotVector[i].mInstructionQueue.clear();
          robotVector[i].get_pull_instructions.clear();
-         active_avoidance(i);
+         // active_avoidance(i);
+         robotVector[i].a_status = robot_num;
       }
-      else if (robotVector[i].status == 0 && robotVector[i].a_status == 1)
+      else if (robotVector[i].status == 0 && robotVector[i].a_status >= 0)
       {
       }
       else
@@ -602,10 +787,10 @@ void PortManager::checkRobot()
 {
    for (int i = 0; i < robot_num; i++)
    {
-      if (robotVector[i].a_status == 1 && robotVector[i].instructionQueue.empty() && robotVector[i].get_pull_instructions.empty()&& robotVector[i].mInstructionQueue.empty())
+      if (robotVector[i].a_status >= 0 && robotVector[i].instructionQueue.empty() && robotVector[i].get_pull_instructions.empty() && robotVector[i].mInstructionQueue.empty())
       {
-         robotVector[i].a_status = 0;
-         // moveRobot(i, robotVector[i].destination);
+         robotVector[i].a_status = -1;
+         moveRobot(i, robotVector[i].destination);
          // if (robotVector[i].goods == 1)
          // {
          //    robotPull(i);
@@ -644,7 +829,7 @@ void PortManager::checkRobot()
                   }
                   if (objectMap.find(std::make_pair(o.x, o.y)) != objectMap.end())
                   {
-                     //std::cerr<<o.x<<" "<<o.y<<std::endl;
+                     // std::cerr<<o.x<<" "<<o.y<<std::endl;
                      moveRobot(i, std::make_pair(o.x, o.y));
                   }
                }
@@ -665,15 +850,31 @@ void PortManager::checkRobot()
                robotPull(i);
                shipVector[berthVector[robotVector[i].berthId].shipId].goods_num++;
             }
-            Berth b = berthVector[robotVector[i].berthId];
-            moveRobot(i, std::make_pair(b.x, b.y));
+            else
+            {
+               Berth b = berthVector[robotVector[i].berthId];
+               moveRobot(i, std::make_pair(b.x, b.y));
+            }
          }
+      }
+      else if (robotVector[i].goods == 1 && robotVector[i].x - berthVector[robotVector[i].berthId].x <= 3 && robotVector[i].y - berthVector[robotVector[i].berthId].y <= 3 && robotVector[i].x - berthVector[robotVector[i].berthId].x >= 0 && robotVector[i].y - berthVector[robotVector[i].berthId].y >= 0)
+      {
+         robotPull(i);
+         shipVector[berthVector[robotVector[i].berthId].shipId].goods_num++;
+         robotVector[i].instructionQueue.clear();
+         robotVector[i].mInstructionQueue.clear();
+
+         // Berth b = berthVector[robotVector[i].berthId];
+         // moveRobot(i, std::make_pair(b.x, b.y));
       }
    }
    for (int i = 0; i < ship_num; i++)
    {
-      if ((shipVector[i].goods_num >= boat_capacity && shipVector[i].status == 1)||(15000-frameId-berthVector[shipVector[i].myBerthId].time<=10&&shipVector[i].status!=0))
+      if ((shipVector[i].goods_num >= boat_capacity && shipVector[i].status == 1) || (15000 - frameId - berthVector[shipVector[i].myBerthId].time <= 10 && shipVector[i].status != 0))
       {
+         // std::cerr<<"test"<<std::endl;
+         // std::cerr<<"boat "<<i<<" is going to destination"<<std::endl;
+         shipVector[i].goods_num = 0;
          shipInstruction.push("go " + std::to_string(i));
       }
    }
@@ -681,8 +882,9 @@ void PortManager::checkRobot()
    {
       if (shipVector[i].berthId == -1 && shipVector[i].status != 0)
       {
-         //std::cerr<<"test"<<std::endl;
+
          shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string(shipVector[i].myBerthId));
+         // std::cerr<<"boat "<<i<<" is going to berth "<<shipVector[i].myBerthId<<std::endl;
       }
    }
 }
@@ -699,7 +901,7 @@ void PortManager::initRobotAndShip()
    robotVector[8].berthId = 8;
    robotVector[9].berthId = 8;
 
-   shipInstruction.push("ship 0 0");
+   shipInstruction.push("ship 0 1");
    shipVector[0].myBerthId = 0;
    berthVector[0].shipId = 0;
    shipInstruction.push("ship 1 2");

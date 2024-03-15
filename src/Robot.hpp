@@ -13,7 +13,7 @@ public:
   int berthId;
   int goods = 0;    // 是否携带货物。0未携带，1携带
   int status = 1;   // 状态，0表示恢复状态，1表示正常状态
-  int a_status = 0; // 主动避让状态，0表示，1表示正在主动避让
+  int a_status = -1; // 主动避让状态，-1表示没有，>=0表示正在主动避让
   std::pair<int, int> destination;
   std::deque<std::string> instructionQueue;
   std::deque<MobileEquipment> mInstructionQueue;
@@ -52,7 +52,8 @@ public:
     for (int i = 1; i < path.size(); i++)
     {
       mInstructionQueue.push_back(path[i]);
-      umap[frameId+i].insert(std::make_pair(std::make_pair(path[i].x,path[i].y),true));
+      //std::cerr<<mInstructionQueue.front().x<<" "<<mInstructionQueue.front().y<<std::endl;
+      //umap[frameId+i].insert(std::make_pair(std::make_pair(path[i].x,path[i].y),true));
     }
     }
 
