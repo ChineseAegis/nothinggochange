@@ -4,6 +4,7 @@
 #include "PortManager.hpp"
 #include "MobileEquipment.hpp"
 #include "PairHash.hpp"
+#include <set>
 // 泊位
 
 class Berth
@@ -15,6 +16,9 @@ public:
     int velocity; // 装载速度,指每帧可以装载的物品数
     int shipId = -1;
     int goods = 0;
+    bool flag = 0;                             // 判断是否分配成功
+    double percent = 0;                        // 占比
+    std::set<std::pair<int, int>> berthid_clo; // 与他最近的berthid,pair 里第一个是距离，第二个是id
 
     Berth()
     {
