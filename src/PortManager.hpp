@@ -13,9 +13,11 @@
 #include <unistd.h>
 #include "PairHash.hpp"
 #include <utility>
+#include <set>
 #include <algorithm> // std::shuffle
 #include <random>    // std::default_random_engine
 #include <chrono>
+using namespace std;
 // #include <execution>
 // #include <utility> // for std::pair
 //  管理地图，船，泊位，机器人的类
@@ -68,7 +70,9 @@ public:
    bool readyInput = 1;
    int thread_status = 1;
    int c;
+   bool flag1 = 0; // 判断每次泊位的组合是否发生变化 0 未发生变化，1 发生变化
 
+   std::set<pair<double, int>> percent_berth; // 第一个是价值，第二个是berthid
    std::vector<Object> objectQueue;
    std::vector<Berth> berthVector;                                       // 管理泊位的数组,索引就是泊位id
    std::vector<Ship> shipVector, rt_shipVector;                          // 船的数组,索引就是船的id
@@ -84,11 +88,12 @@ public:
    std::vector<double> berth_value; //
    std::vector<std::unordered_map<std::pair<int, int>, std::vector<MobileEquipment>, pair_hash>> pathofgood;
    std::vector<std::unordered_map<std::pair<int, int>, int, pair_hash>> distogood;
-
+   std::vector<vector<int>> berth_result; // 分组结果
    void input();
    void run();                                                      // 主函数，在main中调用这个函数
    void initData();                                                 // 从标准输入初始化数据
    int readFrame();                                                 // 从一帧中读取数据
+   void berth_fen();                                                // 给泊位分组
    void outputFrame();                                              // 输出一帧..
    void cal_path_of_maxvalue(Berth &b, std::vector<Object> &goods); // 每个泊位对应的搬运队列
    void cal_berth_value(std::vector<Object> &goods);
@@ -208,6 +213,11 @@ int PortManager::readFrame()
       //    cal_path_of_maxvalue(berthVector[i], objectQueue);
       // }
       objectQueue.clear();
+   }
+
+   if (frameId % 500 == 0)
+   {
+      berth_fen();
    }
 
    return frameId;
@@ -918,6 +928,7 @@ void PortManager::checkRobot()
 
    for (int i = 0; i < robot_num; i++)
    {
+      // 更改避障状态
       if (robotVector[i].a_status >= 0 && robotVector[i].instructionQueue.empty() && robotVector[i].get_pull_instructions.empty() && robotVector[i].mInstructionQueue.empty())
       {
          robotVector[i].a_status = -1;
@@ -939,7 +950,6 @@ void PortManager::checkRobot()
 
             if (it == objectMap.end())
             {
-
                // std::cerr << "test ";
                if (!path_of_move[robotVector[i].berthId].empty())
                {
@@ -947,6 +957,8 @@ void PortManager::checkRobot()
                   Object o = *path_of_move[robotVector[i].berthId].rbegin();
                   path_of_move[robotVector[i].berthId].erase(std::prev(path_of_move[robotVector[i].berthId].end()));
                   int distance = distogood[robotVector[i].berthId].at(std::make_pair(o.x, o.y));
+                  // 判断是否在碰到前消失
+
                   while (o.disappearFrame < frameId + distance)
                   {
                      if (!path_of_move[robotVector[i].berthId].empty())
@@ -964,6 +976,17 @@ void PortManager::checkRobot()
                   {
                      // std::cerr<<o.x<<" "<<o.y<<std::endl;
                      moveRobot(i, std::make_pair(o.x, o.y));
+                     // 当物品被移除时，删除泊位的价值
+                     if (objectMap.find(std::make_pair(o.x, o.y)) != objectMap.end())
+                     {
+                        objectMap.erase(std::make_pair(o.x, o.y));
+                     }
+
+                     std::pair<int, int> temp_obj = std::make_pair(o.x, o.y);
+                     int t_money = objectMap[temp_obj].money;
+                     int t_dist = objectMap[temp_obj].dist;
+                     int t_id = objectMap[temp_obj].berthid;
+                     berth_value[t_id] -= static_cast<double>(t_money) / t_dist;
                   }
                }
             }
@@ -1113,4 +1136,78 @@ void PortManager::distributeObject()
       if (object.berthid >= 0)
          path_of_move[object.berthid].insert(object);
    }
+}
+void PortManager::berth_fen()
+{
+   flag1 = 0;
+   //
+   vector<vector<int>> t_berth_result(10);
+
+   // 计算每个泊位的价值占比
+
+   double sum_value;
+   for (auto v : berth_value)
+   {
+      sum_value += v;
+   }
+   int i = 0;
+   for (auto v : berth_value)
+   {
+      berthVector[i].percent = v / sum_value;
+      percent_berth.insert(make_pair(berthVector[i].percent, i));
+      i++;
+   }
+   //
+   // 找每个泊位的最近泊位
+   for (auto b : berthVector)
+   {
+      for (auto bb : berthVector)
+      {
+         if (b.id == bb.id)
+            continue;
+         else
+         {
+            std::vector<MobileEquipment> path = bfs(MobileEquipment(b.x, b.y), MobileEquipment(bb.x, bb.y));
+            if (path.size() > 0 && path.size() <= 100)
+               b.berthid_clo.insert(std::make_pair(path.size(), bb.id));
+         }
+      }
+   }
+   ////
+   // 泊位组合
+   int j = 0;        // 分组序列
+   double t_val = 0; // 临时记录当前组的价值
+   for (auto b : percent_berth)
+   {
+      if (berthVector[b.second].flag == 1)
+         continue;
+      if (berthVector[b.second].berthid_clo.empty())
+      {
+         if (b.first < 0.05)
+            continue;
+      }
+      t_val += b.first;
+      t_berth_result[j].push_back(b.second);
+      berthVector[b.second].flag = 1;
+      while (t_val < 0.1) // 占比 小于 10%
+      {
+         if (berthVector[b.second].berthid_clo.empty())
+         {
+            break;
+         }
+         int t_id = (*(berthVector[b.second].berthid_clo.begin())).second;
+         berthVector[b.second].berthid_clo.erase(berthVector[b.second].berthid_clo.begin());
+         t_berth_result[j].push_back(t_id);
+         berthVector[t_id].flag = 1;
+         t_val += berthVector[t_id].percent;
+      }
+      j++;
+      t_val = 0;
+   }
+   // 判断是否没变
+   if (berth_result != t_berth_result)
+   {
+      flag1 = 1;
+   }
+   berth_result.swap(t_berth_result);
 }
