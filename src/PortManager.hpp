@@ -1110,6 +1110,7 @@ void PortManager::distributeObject()
    }
    for (auto &object : objectQueue)
    {
-      path_of_move[object.berthid].insert(object);
+      if (object.berthid >= 0)
+         path_of_move[object.berthid].insert(object);
    }
 }
