@@ -909,11 +909,9 @@ void PortManager::checkRobot()
       {
          berthVector[i].goods--;
          shipVector[berthVector[i].shipId].goods_num++;
-         if (berthVector[i].shipId == 1)
-         {
-            std::cerr << shipVector[berthVector[i].shipId].goods_num << std::endl;
-         }
+         
       }
+      //std::cerr<<berthVector[i].goods<<std::endl;
    }
 
    for (int i = 0; i < robot_num; i++)
@@ -1006,7 +1004,7 @@ void PortManager::checkRobot()
    for (int i = 0; i < ship_num; i++)
    {
 
-      if ((shipVector[i].goods_num >= boat_capacity && shipVector[i].status == 1) || (15000 - frameId - berthVector[shipVector[i].myBerthId].time <= 5 && shipVector[i].status != 0))
+      if ((shipVector[i].goods_num >= boat_capacity && shipVector[i].status == 1) || (15000 - frameId - berthVector[shipVector[i].berthId].time <= 5 && shipVector[i].status != 0))
       {
          // std::cerr<<"test"<<std::endl;
          // std::cerr<<"boat "<<i<<" is going to destination"<<std::endl;
@@ -1015,11 +1013,15 @@ void PortManager::checkRobot()
          berthVector[shipVector[i].berthId].shipId = -1;
          shipVector[i].time = 200;
       }
-      if (shipVector[i].time <= 0 && shipVector[i].status == 1)
+      if (shipVector[i].time <= 0 && shipVector[i].status == 1 && (15000 - frameId - berthVector[(shipVector[i].berthId+5)%10].time-500 >5 && shipVector[i].status != 0))
       {
          shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string((shipVector[i].berthId + 5) % 10));
          berthVector[shipVector[i].berthId].shipId = -1;
          shipVector[i].time = 200;
+         if(14000 - frameId - berthVector[shipVector[i].berthId].time<6)
+         {
+            robotVector[i].berthId=(i+5)%10;
+         }
       }
    }
    for (int i = 0; i < ship_num; i++)
