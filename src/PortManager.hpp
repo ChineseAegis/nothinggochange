@@ -16,7 +16,6 @@
 #include <algorithm> // std::shuffle
 #include <random>    // std::default_random_engine
 #include <chrono>
-// #include <algorithm>
 // #include <execution>
 // #include <utility> // for std::pair
 //  管理地图，船，泊位，机器人的类
@@ -39,6 +38,14 @@ public:
       bool operator()(const Object &a, const Object &b)
       {
          return a.money > b.money;
+      }
+   };
+
+   struct BerthTimeCompare
+   {
+      bool operator()(const Berth &a, const Berth &b)
+      {
+         return a.id < b.id;
       }
    };
    // struct Robot_hash
@@ -89,7 +96,7 @@ public:
    void all_path();
    void deleteObject();
    bool setdist(Object &g, Berth &b);
-   bool moveRobot(int id, std::pair<int, int> destination, bool changeDestination = true);
+   bool moveRobot(int id, std::pair<int, int> destination, bool changeDestination = true, std::vector<MobileEquipment> *path = nullptr);
    void robotGet(int id);  // 延迟指令，不是实时生效的，可能要等机器人move到目的地后才生效
    void robotPull(int id); // 延迟指令，不是实时生效的，可能要等机器人move到目的地后才生效
    void insert_robot_move_instructions();
@@ -130,7 +137,7 @@ void PortManager::initData()
    path_of_move.resize(berth_num);
    pathofgood.resize(berth_num);
    distogood.resize(berth_num);
-   // all_path();
+   all_path();
    initRobotAndShip();
    printf("OK\n");
    fflush(stdout);
@@ -190,7 +197,7 @@ int PortManager::readFrame()
    {
       all_goods_path(objectQueue);
 
-      for (int i = 0; i < 10; i += 2)
+      for (int i = 0; i < 10; i++)
       {
 
          cal_path_of_maxvalue(berthVector[i], objectQueue);
@@ -499,20 +506,23 @@ void PortManager::all_goods_path(std::vector<Object> &goods)
                                          {
         std::vector<std::thread> innerThreads;
 
-        for (size_t i = 0; i < goods.size(); ++i) {
+        size_t batchSize = 3; // 每个线程处理的goods数量
+        for (size_t i = 0; i < goods.size(); i += batchSize) {
             innerThreads.push_back(std::thread([&, j, i] {
-                // 这里执行BFS
-                auto path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(goods[i].x, goods[i].y));
-                if (!path.empty()) {
-                    m.lock();
-                    distogood[j].insert(std::make_pair(std::make_pair(goods[i].x, goods[i].y), path.size() - 1));
-                    m.unlock();
+                // 处理当前批次的每个goods元素
+                for (size_t k = i; k < i + batchSize && k < goods.size(); ++k) {
+                    auto path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(goods[k].x, goods[k].y));
+                    if (!path.empty()) {
+                        m.lock();
+                        distogood[j].insert(std::make_pair(std::make_pair(goods[k].x, goods[k].y), path.size() - 1));
+                        m.unlock();
+                    }
                 }
             }));
         }
 
         // 等待内层所有线程完成
-        for (auto &innerThread : innerThreads) {
+        for (auto& innerThread : innerThreads) {
             if (innerThread.joinable()) {
                 innerThread.join();
             }
@@ -546,21 +556,73 @@ void PortManager::processBerth(size_t j)
 }
 void PortManager::all_path()
 {
-   for (int j = 0; j < berthVector.size(); j++)
+   // for (int j = 0; j < berthVector.size(); j++)
+   // {
+   //    for (int x = 0; x < map.grid.size(); x++)
+   //    {
+   //       for (int y = 0; y < map.grid[j].size(); y++)
+   //       {
+   //          std::vector<MobileEquipment> path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(x, y));
+   //          //pathofgood[j].insert(std::make_pair(std::make_pair(x, y), path));
+   //          distogood[j].insert(std::make_pair(std::make_pair(x, y), path.size() - 1));
+   //       }
+   //    }
+   // }
+   std::vector<std::thread> outerThreads;
+
+   for (int j = 0; j < berthVector.size(); ++j)
    {
-      for (int x = 0; x < map.grid.size(); x++)
-      {
-         for (int y = 0; y < map.grid[j].size(); y++)
-         {
-            std::vector<MobileEquipment> path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(x, y));
-            pathofgood[j].insert(std::make_pair(std::make_pair(x, y), path));
-            distogood[j].insert(std::make_pair(std::make_pair(x, y), path.size() - 1));
-         }
-      }
+      outerThreads.push_back(std::thread([&, j]()
+                                         {
+            std::vector<std::thread> innerThreads;
+
+            for (int x = 0; x < map.grid.size(); x += 100) {
+                innerThreads.push_back(std::thread([&, j, x]() {
+                    for (int i = x; i < std::min(x + 100, static_cast<int>(map.grid.size())); i+=20) {
+                        for (int y = 0; y < map.grid[j].size(); y+=20) {
+                           bool isbreak=0;
+                              for(int c=0;c<20;c++)
+                              {
+                                 for(int d=0;d<20;d++)
+                                 {
+                                    if(isValid(c+i,d+y,1))
+                                    {
+                                       std::vector<MobileEquipment> path = bfs(MobileEquipment(berthVector[j].x, berthVector[j].y), MobileEquipment(c+i, d+y));
+                                       //std::cerr<<c+i<<" "<<d+y<<std::endl;
+                                       double result=static_cast<double>(path.size())/(std::abs(c+i-berthVector[j].x)+std::abs(d+y-berthVector[j].y));
+                                       //std::cerr<<"result "<<result<<std::endl;
+                                                                   // 使用互斥锁保护共享资源的写入
+                                       std::lock_guard<std::mutex> guard(m);
+                                       distogood[j].insert(std::make_pair(std::make_pair(c+i, d+y), path.size() - 1));
+                                       isbreak=1;
+                                       break;
+                                    }
+                                 }
+                                 if(isbreak)
+                                 {
+                                    break;
+                                 }
+                              }                            
+
+                        }
+                    }
+                }));
+            }
+
+            // 等待所有内层线程完成
+            for (auto& t : innerThreads) {
+                t.join();
+            } }));
+   }
+
+   // 等待所有外层线程完成
+   for (auto &t : outerThreads)
+   {
+      t.join();
    }
 }
 
-bool PortManager::moveRobot(int id, std::pair<int, int> destination, bool changeDestination)
+bool PortManager::moveRobot(int id, std::pair<int, int> destination, bool changeDestination, std::vector<MobileEquipment> *path)
 {
    // for (int i = 0; i < berth_num; i++)
    // {
@@ -572,20 +634,38 @@ bool PortManager::moveRobot(int id, std::pair<int, int> destination, bool change
    //       return;
    //    }
    // }
-
-   std::vector<MobileEquipment> path = bfs(MobileEquipment(robotVector[id].x, robotVector[id].y), MobileEquipment(destination.first, destination.second));
-   if (path.size() == 0)
+   if (path != nullptr)
    {
-      return false;
+      if (path->size() == 0)
+      {
+         return false;
+      }
+      else
+      {
+         robotVector[id].handlePath(*path, id, robotLocation, frameId);
+         if (changeDestination)
+         {
+            robotVector[id].destination = destination;
+         }
+         return true;
+      }
    }
    else
    {
-      robotVector[id].handlePath(path, id, robotLocation, frameId);
-      if (changeDestination)
+      std::vector<MobileEquipment> path1 = bfs(MobileEquipment(robotVector[id].x, robotVector[id].y), MobileEquipment(destination.first, destination.second));
+      if (path1.size() == 0)
       {
-         robotVector[id].destination = destination;
+         return false;
       }
-      return true;
+      else
+      {
+         robotVector[id].handlePath(path1, id, robotLocation, frameId);
+         if (changeDestination)
+         {
+            robotVector[id].destination = destination;
+         }
+         return true;
+      }
    }
 }
 void PortManager::robotGet(int id)
@@ -785,6 +865,31 @@ void PortManager::active_avoidance(int i)
 }
 void PortManager::checkRobot()
 {
+   for (int i = 0; i < ship_num; i++)
+   {
+      if (shipVector[i].berthId>=0 && shipVector[i].status == 1)
+      {
+         berthVector[shipVector[i].berthId].shipId = i;
+         shipVector[i].time--;
+      }
+         // if(i==1)
+         // {
+         //    std::cerr<<shipVector[i].goods_num<<std::endl;
+         // }
+   }
+   for (int i = 0; i < berth_num; i++)
+   {
+      int counter=berthVector[i].velocity;
+      while(berthVector[i].goods && berthVector[i].shipId>=0&&counter--)
+      {
+         berthVector[i].goods--;
+         shipVector[berthVector[i].shipId].goods_num++;
+         if(berthVector[i].shipId==1)
+         {
+            std::cerr<<shipVector[berthVector[i].shipId].goods_num<<std::endl;
+         }
+      }
+   }
    for (int i = 0; i < robot_num; i++)
    {
       if (robotVector[i].a_status >= 0 && robotVector[i].instructionQueue.empty() && robotVector[i].get_pull_instructions.empty() && robotVector[i].mInstructionQueue.empty())
@@ -815,7 +920,7 @@ void PortManager::checkRobot()
                   // std::cerr << "test ";
                   Object o = *path_of_move[robotVector[i].berthId].rbegin();
                   path_of_move[robotVector[i].berthId].erase(std::prev(path_of_move[robotVector[i].berthId].end()));
-                  while (objectMap.find(std::make_pair(o.x, o.y)) == objectMap.end())
+                  while (o.disappearFrame < frameId + std::abs(robotVector[i].x - o.x) + std::abs(robotVector[i].y - o.y))
                   {
                      if (!path_of_move[robotVector[i].berthId].empty())
                      {
@@ -827,7 +932,7 @@ void PortManager::checkRobot()
                         break;
                      }
                   }
-                  if (objectMap.find(std::make_pair(o.x, o.y)) != objectMap.end())
+                  if (o.disappearFrame > frameId + std::abs(robotVector[i].x - o.x) + std::abs(robotVector[i].y - o.y))
                   {
                      // std::cerr<<o.x<<" "<<o.y<<std::endl;
                      moveRobot(i, std::make_pair(o.x, o.y));
@@ -848,7 +953,7 @@ void PortManager::checkRobot()
             if (robotVector[i].x - berthVector[robotVector[i].berthId].x <= 3 && robotVector[i].y - berthVector[robotVector[i].berthId].y <= 3 && robotVector[i].x - berthVector[robotVector[i].berthId].x >= 0 && robotVector[i].y - berthVector[robotVector[i].berthId].y >= 0)
             {
                robotPull(i);
-               shipVector[berthVector[robotVector[i].berthId].shipId].goods_num++;
+               berthVector[robotVector[i].berthId].goods++;
             }
             else
             {
@@ -860,7 +965,8 @@ void PortManager::checkRobot()
       else if (robotVector[i].goods == 1 && robotVector[i].x - berthVector[robotVector[i].berthId].x <= 3 && robotVector[i].y - berthVector[robotVector[i].berthId].y <= 3 && robotVector[i].x - berthVector[robotVector[i].berthId].x >= 0 && robotVector[i].y - berthVector[robotVector[i].berthId].y >= 0)
       {
          robotPull(i);
-         shipVector[berthVector[robotVector[i].berthId].shipId].goods_num++;
+         //shipVector[berthVector[robotVector[i].berthId].shipId].goods_num++;
+         berthVector[robotVector[i].berthId].goods++;
          robotVector[i].instructionQueue.clear();
          robotVector[i].mInstructionQueue.clear();
 
@@ -868,54 +974,88 @@ void PortManager::checkRobot()
          // moveRobot(i, std::make_pair(b.x, b.y));
       }
    }
+
    for (int i = 0; i < ship_num; i++)
    {
-      if ((shipVector[i].goods_num >= boat_capacity && shipVector[i].status == 1) || (15000 - frameId - berthVector[shipVector[i].myBerthId].time <= 10 && shipVector[i].status != 0))
-      {
-         // std::cerr<<"test"<<std::endl;
-         // std::cerr<<"boat "<<i<<" is going to destination"<<std::endl;
-         shipVector[i].goods_num = 0;
-         shipInstruction.push("go " + std::to_string(i));
-      }
+
+         if ((shipVector[i].goods_num >= boat_capacity && shipVector[i].status == 1) || (15000 - frameId - berthVector[shipVector[i].myBerthId].time <= 5 && shipVector[i].status != 0))
+         {
+            // std::cerr<<"test"<<std::endl;
+            // std::cerr<<"boat "<<i<<" is going to destination"<<std::endl;
+            shipVector[i].goods_num = 0;
+            shipInstruction.push("go " + std::to_string(i));
+            berthVector[shipVector[i].berthId].shipId = -1;
+            shipVector[i].time=200;
+         }
+         if (shipVector[i].time<=0 && shipVector[i].status == 1)
+         {
+            shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string((shipVector[i].berthId + 5) % 10));
+            berthVector[shipVector[i].berthId].shipId = -1;
+            shipVector[i].time=200;
+         }
+
    }
    for (int i = 0; i < ship_num; i++)
    {
       if (shipVector[i].berthId == -1 && shipVector[i].status != 0)
       {
-
-         shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string(shipVector[i].myBerthId));
+         if (berthVector[shipVector[i].myBerthId].goods > berthVector[(shipVector[i].myBerthId + 5) % 10].goods)
+         {
+            shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string(shipVector[i].myBerthId));
+            
+         }
+         else
+         {
+            shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string((shipVector[i].myBerthId + 5) % 10));
+         }
+         shipVector[i].time=200;
          // std::cerr<<"boat "<<i<<" is going to berth "<<shipVector[i].myBerthId<<std::endl;
       }
    }
 }
 void PortManager::initRobotAndShip()
 {
-   robotVector[0].berthId = 0;
-   robotVector[1].berthId = 0;
-   robotVector[2].berthId = 2;
-   robotVector[3].berthId = 2;
-   robotVector[4].berthId = 4;
-   robotVector[5].berthId = 4;
-   robotVector[6].berthId = 6;
-   robotVector[7].berthId = 6;
-   robotVector[8].berthId = 8;
-   robotVector[9].berthId = 8;
 
-   shipInstruction.push("ship 0 1");
-   shipVector[0].myBerthId = 0;
-   berthVector[0].shipId = 0;
-   shipInstruction.push("ship 1 2");
-   shipVector[1].myBerthId = 2;
-   berthVector[2].shipId = 1;
-   shipInstruction.push("ship 2 4");
-   shipVector[2].myBerthId = 4;
-   berthVector[4].shipId = 2;
-   shipInstruction.push("ship 3 6");
-   shipVector[3].myBerthId = 6;
-   berthVector[6].shipId = 3;
-   shipInstruction.push("ship 4 8");
-   shipVector[4].myBerthId = 8;
-   berthVector[8].shipId = 4;
+   //std::vector<Berth> ordered_berth = berthVector;
+   //std::sort(ordered_berth.begin(), ordered_berth.end(), BerthTimeCompare());
+   for (int i = 0; i < ship_num; i++)
+   {
+      shipVector[i].myBerthId=i; 
+      berthVector[i].shipId = i;
+      shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string(i));
+      shipVector[i].time=200;
+   }
+   for (int i = 0; i < robot_num; i++)
+   {
+      robotVector[i].berthId = i;
+   }
+
+   // robotVector[0].berthId = 0;
+   // robotVector[1].berthId = 0;
+   // robotVector[2].berthId = 2;
+   // robotVector[3].berthId = 2;
+   // robotVector[4].berthId = 4;
+   // robotVector[5].berthId = 4;
+   // robotVector[6].berthId = 6;
+   // robotVector[7].berthId = 6;
+   // robotVector[8].berthId = 8;
+   // robotVector[9].berthId = 8;
+
+   // shipInstruction.push("ship 0 0");
+   // shipVector[0].myBerthId = 0;
+   // berthVector[0].shipId = 0;
+   // shipInstruction.push("ship 1 2");
+   // shipVector[1].myBerthId = 2;
+   // berthVector[2].shipId = 1;
+   // shipInstruction.push("ship 2 4");
+   // shipVector[2].myBerthId = 4;
+   // berthVector[4].shipId = 2;
+   // shipInstruction.push("ship 3 6");
+   // shipVector[3].myBerthId = 6;
+   // berthVector[6].shipId = 3;
+   // shipInstruction.push("ship 4 8");
+   // shipVector[4].myBerthId = 8;
+   // berthVector[8].shipId = 4;
 }
 
 void PortManager::distributeObject()
