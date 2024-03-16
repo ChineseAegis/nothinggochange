@@ -200,12 +200,13 @@ int PortManager::readFrame()
    if (objectQueue.size())
    {
       all_goods_path(objectQueue);
+      distributeObject();
+      cal_berth_value(objectQueue);
+      // for (int i = 0; i < 10; i++)
+      // {
 
-      for (int i = 0; i < 10; i++)
-      {
-         cal_path_of_maxvalue(berthVector[i], objectQueue);
-      }
-      cal_berth_value(objectQueue); // 计算价值
+      //    cal_path_of_maxvalue(berthVector[i], objectQueue);
+      // }
       objectQueue.clear();
    }
 
@@ -215,7 +216,7 @@ void PortManager::cal_berth_value(std::vector<Object> &goods)
 {
    for (auto g : goods)
    {
-      berth_value[g.berthid] += g.money / g.dist;
+      berth_value[g.berthid] += static_cast<double>(g.money) / g.dist;
    }
 }
 void PortManager::outputFrame()
@@ -268,7 +269,8 @@ void PortManager::deleteObject()
       int t_money = objectMap[temp_obj].money;
       int t_dist = objectMap[temp_obj].dist;
       int t_id = objectMap[temp_obj].berthid;
-      berth_value[t_id] -= t_money / t_dist;
+      berth_value[t_id] -= static_cast<double>(t_money) / t_dist;
+
       //
       objectMap.erase(std::make_pair(deleteQueue.front().x, deleteQueue.front().y));
       deleteQueue.pop();
@@ -943,19 +945,21 @@ void PortManager::checkRobot()
                   // std::cerr << "test ";
                   Object o = *path_of_move[robotVector[i].berthId].rbegin();
                   path_of_move[robotVector[i].berthId].erase(std::prev(path_of_move[robotVector[i].berthId].end()));
-                  while (o.disappearFrame < frameId + std::abs(robotVector[i].x - o.x) + std::abs(robotVector[i].y - o.y))
+                  int distance = distogood[robotVector[i].berthId].at(std::make_pair(o.x, o.y));
+                  while (o.disappearFrame < frameId + distance)
                   {
                      if (!path_of_move[robotVector[i].berthId].empty())
                      {
                         Object o = *path_of_move[robotVector[i].berthId].rbegin();
                         path_of_move[robotVector[i].berthId].erase(std::prev(path_of_move[robotVector[i].berthId].end()));
+                        distance = distogood[robotVector[i].berthId].at(std::make_pair(o.x, o.y));
                      }
                      else
                      {
                         break;
                      }
                   }
-                  if (o.disappearFrame > frameId + std::abs(robotVector[i].x - o.x) + std::abs(robotVector[i].y - o.y))
+                  if (o.disappearFrame > frameId + distance)
                   {
                      // std::cerr<<o.x<<" "<<o.y<<std::endl;
                      moveRobot(i, std::make_pair(o.x, o.y));
@@ -1081,16 +1085,30 @@ void PortManager::initRobotAndShip()
 
 void PortManager::distributeObject()
 {
-   for (auto &object : objectMap)
+   for (auto &object : objectQueue)
    {
-      int distance = std::numeric_limits<int>::max();
-      for (auto &ship : shipVector)
+
+      for (auto &berth : berthVector)
       {
-         Berth b = berthVector[ship.berthId];
-         if (sqrt((object.second.x - b.x) * (object.second.x - b.x) + (object.second.y - b.y) * (object.second.y - b.y)) <= distance)
+         int distance = std::numeric_limits<int>::max();
+         if (distogood[berth.id].find(std::make_pair(object.x, object.y)) != distogood[berth.id].end())
          {
-            object.second.berthid = b.id;
+            distance = distogood[berth.id].at(std::make_pair(object.x, object.y));
+         }
+         else
+         {
+            distance = std::numeric_limits<int>::max();
+         }
+
+         if (distance < object.dist)
+         {
+            object.berthid = berth.id;
+            object.dist = distance;
          }
       }
+   }
+   for (auto &object : objectQueue)
+   {
+      path_of_move[object.berthid].insert(object);
    }
 }
