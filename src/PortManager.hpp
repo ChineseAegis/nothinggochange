@@ -81,6 +81,7 @@ public:
    std::queue<std::string> robotInstruction; // 管理机器人指令的队列，不要往这个队列插入机器人的move指令
    std::queue<std::string> shipInstruction;  // 管理船指令的队列
    std::vector<std::set<Object, Compare>> path_of_move;
+   vector<double> berth_value; //
    std::vector<std::unordered_map<std::pair<int, int>, std::vector<MobileEquipment>, pair_hash>> pathofgood;
    std::vector<std::unordered_map<std::pair<int, int>, int, pair_hash>> distogood;
 
@@ -90,6 +91,7 @@ public:
    int readFrame();                                                 // 从一帧中读取数据
    void outputFrame();                                              // 输出一帧..
    void cal_path_of_maxvalue(Berth &b, std::vector<Object> &goods); // 每个泊位对应的搬运队列
+   void cal_berth_value(std::vector<Object> &goods);
    bool isValid(int x, int y, int frameId);
    std::vector<MobileEquipment> bfs(MobileEquipment start, MobileEquipment end);
    void all_goods_path(std::vector<Object> &goods);
@@ -130,6 +132,8 @@ void PortManager::initData()
    scanf("%d", &boat_capacity);
    char okk[100];
    scanf("%s", okk);
+
+   berth_value.resize(berth_num);
    shipVector.resize(ship_num);
    rt_shipVector.resize(ship_num);
    robotVector.resize(robot_num);
@@ -199,15 +203,23 @@ int PortManager::readFrame()
 
       for (int i = 0; i < 10; i++)
       {
-
          cal_path_of_maxvalue(berthVector[i], objectQueue);
       }
+      cal_berth_value(objectQueue); // 计算价值
       objectQueue.clear();
    }
 
    return frameId;
 }
+void PortManager::cal_berth_value(std::vector<Object> &goods)
+{
+   for (auto g : goods)
+   {
+      berth_value[g.berthid] += g.money / g.dist;
+   }
+}
 void PortManager::outputFrame()
+
 {
    if (readyOutput)
    {
@@ -251,6 +263,13 @@ void PortManager::deleteObject()
 {
    while (!deleteQueue.empty() && deleteQueue.front().disappearFrame <= frameId)
    {
+      // 这段是当删除物品时，把泊位附带的价值删去
+      pair<int, int> temp_obj = std::make_pair(deleteQueue.front().x, deleteQueue.front().y);
+      int t_money = objectMap[temp_obj].money;
+      int t_dist = objectMap[temp_obj].dist;
+      int t_id = objectMap[temp_obj].berthid;
+      berth_value[t_id] -= t_money / t_dist;
+      //
       objectMap.erase(std::make_pair(deleteQueue.front().x, deleteQueue.front().y));
       deleteQueue.pop();
    }
@@ -323,7 +342,7 @@ void PortManager::cal_path_of_maxvalue(Berth &b, std::vector<Object> &goods)
 { // 传入货物数组
    // path_of_move[b.id].clear();
    int max = 0;
-
+   //
    for (int i = 0; i < goods.size(); i++)
    {
       Object &g = goods[i];
@@ -335,14 +354,14 @@ void PortManager::cal_path_of_maxvalue(Berth &b, std::vector<Object> &goods)
       }
    }
 
-   for (int i = 0; i < goods.size(); i++)
-   {
-      Object &g = goods[i];
-      if (g.dist > max)
-      {
-         max = g.dist;
-      }
-   }
+   // for (int i = 0; i < goods.size(); i++)
+   // {
+   //    Object &g = goods[i];
+   //    if (g.dist > max)
+   //    {
+   //       max = g.dist;
+   //    }
+   // }
    // MaxIndexHeap heap(g);
    // max=heap.removemax();
    // std::vector<Object> pathofvalue;
@@ -865,31 +884,35 @@ void PortManager::active_avoidance(int i)
 }
 void PortManager::checkRobot()
 {
+   // 分配船和泊位
    for (int i = 0; i < ship_num; i++)
    {
-      if (shipVector[i].berthId>=0 && shipVector[i].status == 1)
+      if (shipVector[i].berthId >= 0 && shipVector[i].status == 1)
       {
          berthVector[shipVector[i].berthId].shipId = i;
          shipVector[i].time--;
       }
-         // if(i==1)
-         // {
-         //    std::cerr<<shipVector[i].goods_num<<std::endl;
-         // }
+      // if(i==1)
+      // {
+      //    std::cerr<<shipVector[i].goods_num<<std::endl;
+      // }
    }
+
+   //
    for (int i = 0; i < berth_num; i++)
    {
-      int counter=berthVector[i].velocity;
-      while(berthVector[i].goods && berthVector[i].shipId>=0&&counter--)
+      int counter = berthVector[i].velocity;
+      while (berthVector[i].goods && berthVector[i].shipId >= 0 && counter--)
       {
          berthVector[i].goods--;
          shipVector[berthVector[i].shipId].goods_num++;
-         if(berthVector[i].shipId==1)
+         if (berthVector[i].shipId == 1)
          {
-            std::cerr<<shipVector[berthVector[i].shipId].goods_num<<std::endl;
+            std::cerr << shipVector[berthVector[i].shipId].goods_num << std::endl;
          }
       }
    }
+
    for (int i = 0; i < robot_num; i++)
    {
       if (robotVector[i].a_status >= 0 && robotVector[i].instructionQueue.empty() && robotVector[i].get_pull_instructions.empty() && robotVector[i].mInstructionQueue.empty())
@@ -965,7 +988,7 @@ void PortManager::checkRobot()
       else if (robotVector[i].goods == 1 && robotVector[i].x - berthVector[robotVector[i].berthId].x <= 3 && robotVector[i].y - berthVector[robotVector[i].berthId].y <= 3 && robotVector[i].x - berthVector[robotVector[i].berthId].x >= 0 && robotVector[i].y - berthVector[robotVector[i].berthId].y >= 0)
       {
          robotPull(i);
-         //shipVector[berthVector[robotVector[i].berthId].shipId].goods_num++;
+         // shipVector[berthVector[robotVector[i].berthId].shipId].goods_num++;
          berthVector[robotVector[i].berthId].goods++;
          robotVector[i].instructionQueue.clear();
          robotVector[i].mInstructionQueue.clear();
@@ -978,22 +1001,21 @@ void PortManager::checkRobot()
    for (int i = 0; i < ship_num; i++)
    {
 
-         if ((shipVector[i].goods_num >= boat_capacity && shipVector[i].status == 1) || (15000 - frameId - berthVector[shipVector[i].myBerthId].time <= 5 && shipVector[i].status != 0))
-         {
-            // std::cerr<<"test"<<std::endl;
-            // std::cerr<<"boat "<<i<<" is going to destination"<<std::endl;
-            shipVector[i].goods_num = 0;
-            shipInstruction.push("go " + std::to_string(i));
-            berthVector[shipVector[i].berthId].shipId = -1;
-            shipVector[i].time=200;
-         }
-         if (shipVector[i].time<=0 && shipVector[i].status == 1)
-         {
-            shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string((shipVector[i].berthId + 5) % 10));
-            berthVector[shipVector[i].berthId].shipId = -1;
-            shipVector[i].time=200;
-         }
-
+      if ((shipVector[i].goods_num >= boat_capacity && shipVector[i].status == 1) || (15000 - frameId - berthVector[shipVector[i].myBerthId].time <= 5 && shipVector[i].status != 0))
+      {
+         // std::cerr<<"test"<<std::endl;
+         // std::cerr<<"boat "<<i<<" is going to destination"<<std::endl;
+         shipVector[i].goods_num = 0;
+         shipInstruction.push("go " + std::to_string(i));
+         berthVector[shipVector[i].berthId].shipId = -1;
+         shipVector[i].time = 200;
+      }
+      if (shipVector[i].time <= 0 && shipVector[i].status == 1)
+      {
+         shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string((shipVector[i].berthId + 5) % 10));
+         berthVector[shipVector[i].berthId].shipId = -1;
+         shipVector[i].time = 200;
+      }
    }
    for (int i = 0; i < ship_num; i++)
    {
@@ -1002,13 +1024,12 @@ void PortManager::checkRobot()
          if (berthVector[shipVector[i].myBerthId].goods > berthVector[(shipVector[i].myBerthId + 5) % 10].goods)
          {
             shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string(shipVector[i].myBerthId));
-            
          }
          else
          {
             shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string((shipVector[i].myBerthId + 5) % 10));
          }
-         shipVector[i].time=200;
+         shipVector[i].time = 200;
          // std::cerr<<"boat "<<i<<" is going to berth "<<shipVector[i].myBerthId<<std::endl;
       }
    }
@@ -1016,14 +1037,14 @@ void PortManager::checkRobot()
 void PortManager::initRobotAndShip()
 {
 
-   //std::vector<Berth> ordered_berth = berthVector;
-   //std::sort(ordered_berth.begin(), ordered_berth.end(), BerthTimeCompare());
+   // std::vector<Berth> ordered_berth = berthVector;
+   // std::sort(ordered_berth.begin(), ordered_berth.end(), BerthTimeCompare());
    for (int i = 0; i < ship_num; i++)
    {
-      shipVector[i].myBerthId=i; 
+      shipVector[i].myBerthId = i;
       berthVector[i].shipId = i;
       shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string(i));
-      shipVector[i].time=200;
+      shipVector[i].time = 200;
    }
    for (int i = 0; i < robot_num; i++)
    {
