@@ -81,7 +81,7 @@ public:
    std::queue<std::string> robotInstruction; // 管理机器人指令的队列，不要往这个队列插入机器人的move指令
    std::queue<std::string> shipInstruction;  // 管理船指令的队列
    std::vector<std::set<Object, Compare>> path_of_move;
-   vector<double> berth_value; //
+   std::vector<double> berth_value; //
    std::vector<std::unordered_map<std::pair<int, int>, std::vector<MobileEquipment>, pair_hash>> pathofgood;
    std::vector<std::unordered_map<std::pair<int, int>, int, pair_hash>> distogood;
 
@@ -216,7 +216,8 @@ void PortManager::cal_berth_value(std::vector<Object> &goods)
 {
    for (auto g : goods)
    {
-      berth_value[g.berthid] += static_cast<double>(g.money) / g.dist;
+      if (g.berthid >= 0)
+         berth_value[g.berthid] += static_cast<double>(g.money) / g.dist;
    }
 }
 void PortManager::outputFrame()
@@ -265,7 +266,7 @@ void PortManager::deleteObject()
    while (!deleteQueue.empty() && deleteQueue.front().disappearFrame <= frameId)
    {
       // 这段是当删除物品时，把泊位附带的价值删去
-      pair<int, int> temp_obj = std::make_pair(deleteQueue.front().x, deleteQueue.front().y);
+      std::pair<int, int> temp_obj = std::make_pair(deleteQueue.front().x, deleteQueue.front().y);
       int t_money = objectMap[temp_obj].money;
       int t_dist = objectMap[temp_obj].dist;
       int t_id = objectMap[temp_obj].berthid;
