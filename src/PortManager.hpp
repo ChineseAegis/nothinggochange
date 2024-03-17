@@ -80,6 +80,7 @@ public:
    std::unordered_map<std::pair<int, int>, Object, pair_hash> objectMap; // 存储物品的哈希表，键值是坐标。
    std::queue<Object> deleteQueue;                                       // 消失物品的队列
    std::unordered_map<int, std::unordered_map<std::pair<int, int>, bool, pair_hash>> robotLocation;
+   std::vector<std::vector<int>> robotBerthReach;
 
    // std::priority_queue<InstructQueue,std::vector<InstructQueue>,CompareInstructQueue> instruction;//指令队列，存储所有指令，注意，队列元素是队列，元素队列中才存储指令
    std::queue<std::string> robotInstruction; // 管理机器人指令的队列，不要往这个队列插入机器人的move指令
@@ -113,6 +114,7 @@ public:
    void initRobotAndShip();
    void distributeObject();
    void processBerth(size_t j);
+   void initRobotBerthReach();
 };
 
 void PortManager::initData()
@@ -138,7 +140,7 @@ void PortManager::initData()
    char okk[100];
    scanf("%s", okk);
 
-   berth_value.resize(berth_num);
+   berth_value.resize(berth_num, 0);
    shipVector.resize(ship_num);
    rt_shipVector.resize(ship_num);
    robotVector.resize(robot_num);
@@ -146,7 +148,12 @@ void PortManager::initData()
    path_of_move.resize(berth_num);
    pathofgood.resize(berth_num);
    distogood.resize(berth_num);
-   all_path();
+   robotBerthReach.resize(10);
+   for (auto &r : robotBerthReach)
+   {
+      r.resize(10);
+   }
+   // all_path();
    initRobotAndShip();
    printf("OK\n");
    fflush(stdout);
@@ -214,11 +221,14 @@ int PortManager::readFrame()
       // }
       objectQueue.clear();
    }
-
-   if (frameId % 500 == 0)
+   if (frameId == 1)
    {
-      berth_fen();
+      initRobotBerthReach();
    }
+   // if (frameId % 500 == 0)
+   // {
+   //    berth_fen();
+   // }
 
    return frameId;
 }
@@ -919,14 +929,33 @@ void PortManager::checkRobot()
       {
          berthVector[i].goods--;
          shipVector[berthVector[i].shipId].goods_num++;
-         
       }
-      //std::cerr<<berthVector[i].goods<<std::endl;
+      // std::cerr<<berthVector[i].goods<<std::endl;
    }
-
+   // cerr<<"begin"<<endl;
    for (int i = 0; i < robot_num; i++)
    {
-      // 更改避障状态
+      //robotVector[i].time--;
+      // std::cerr<<berth_value[i]<<endl;
+      //  更改避障状态
+      if (robotVector[i].berthId == robotVector[i].myberthId)
+      {
+         if (berthVector[robotVector[i].berthId].shipId == -1 && 14500 - frameId - berthVector[robotVector[i].berthId].time < 6||!berthVector[robotVector[i].berthId].vaild)
+         {
+            robotVector[i].berthId = (robotVector[i].berthId + 5) % 10;
+         }
+      }
+      else
+      {
+         if (berthVector[robotVector[i].myberthId].shipId == -1 && 14500 - frameId - berthVector[robotVector[i].myberthId].time < 40||!berthVector[robotVector[i].myberthId].vaild)
+         {
+            robotVector[i].berthId = (robotVector[i].myberthId + 5) % 10;
+         }
+         else
+         {
+            robotVector[i].berthId = robotVector[i].myberthId;
+         }
+      }
       if (robotVector[i].a_status >= 0 && robotVector[i].instructionQueue.empty() && robotVector[i].get_pull_instructions.empty() && robotVector[i].mInstructionQueue.empty())
       {
          robotVector[i].a_status = -1;
@@ -948,6 +977,52 @@ void PortManager::checkRobot()
 
             if (it == objectMap.end())
             {
+               if (robotVector[i].berthId != robotVector[i].myberthId)
+               {
+                  double sum;
+                  for (auto &value : berth_value)
+                  {
+                     sum += value;
+                  }
+                  if ((berth_value[robotVector[i].myberthId] / sum > 0.04 || berth_value[robotVector[i].berthId] / sum <= 0.1)&&berthVector[robotVector[i].myberthId].vaild)
+                  {
+                     robotVector[i].berthId = robotVector[i].myberthId;
+                  }
+               }
+               if (path_of_move[robotVector[i].berthId].empty() && robotVector[i].berthId == robotVector[i].myberthId && frameId > 500)
+               {
+                  double sum;
+                  for (auto &value : berth_value)
+                  {
+                     sum += value;
+                  }
+                  std::set<std::pair<double, int>> s;
+                  for (int n = 0; n < berth_num; n++)
+                  {
+                     s.insert(std::make_pair(berth_value[n], n));
+                  }
+                  int id = s.rbegin()->second;
+                  while (!robotBerthReach[i][id]||!berthVector[id].vaild)
+                  {
+                     s.erase(*s.rbegin());
+                     id = s.rbegin()->second;
+                  }
+                  // std::cerr << berth_value[id] / sum << endl;
+                  if (robotBerthReach[i][id] && berth_value[id] / sum >= 0.2&&berthVector[id].vaild)
+                  {
+                     robotVector[i].berthId = id;
+                     robotVector[i].time=300;
+                  }
+                  else if (robotBerthReach[i][(robotVector[i].myberthId + 1) % 10]&&!path_of_move[(robotVector[i].myberthId + 1) % 10].empty()&&berthVector[(robotVector[i].myberthId + 1) % 10].vaild)
+                  {
+                     robotVector[i].berthId = (robotVector[i].myberthId + 1) % 10;
+                  }
+                  else if (robotBerthReach[i][(robotVector[i].myberthId + 1) % 10]&&!path_of_move[(robotVector[i].myberthId + 9) % 10].empty()&&berthVector[(robotVector[i].myberthId + 9) % 10].vaild)
+                  {
+                     robotVector[i].berthId = (robotVector[i].myberthId + 9) % 10;
+                  }
+               }
+
                // std::cerr << "test ";
                if (!path_of_move[robotVector[i].berthId].empty())
                {
@@ -975,11 +1050,6 @@ void PortManager::checkRobot()
                      // std::cerr<<o.x<<" "<<o.y<<std::endl;
                      moveRobot(i, std::make_pair(o.x, o.y));
                      // 当物品被移除时，删除泊位的价值
-                     if (objectMap.find(std::make_pair(o.x, o.y)) != objectMap.end())
-                     {
-                        objectMap.erase(std::make_pair(o.x, o.y));
-                     }
-
                      std::pair<int, int> temp_obj = std::make_pair(o.x, o.y);
                      int t_money = objectMap[temp_obj].money;
                      int t_dist = objectMap[temp_obj].dist;
@@ -992,7 +1062,7 @@ void PortManager::checkRobot()
             {
 
                robotGet(i);
-
+               objectMap.erase(std::make_pair(robotVector[i].x, robotVector[i].y));
                Berth b = berthVector[robotVector[i].berthId];
                moveRobot(i, std::make_pair(b.x, b.y));
             }
@@ -1036,14 +1106,16 @@ void PortManager::checkRobot()
          berthVector[shipVector[i].berthId].shipId = -1;
          shipVector[i].time = 200;
       }
-      if (shipVector[i].time <= 0 && shipVector[i].status == 1 && (15000 - frameId - berthVector[(shipVector[i].berthId+5)%10].time-500 >5 && shipVector[i].status != 0))
+      if (shipVector[i].time <= 0 && shipVector[i].status == 1 && (15000 - frameId - berthVector[(shipVector[i].berthId + 5) % 10].time - 500 > 5 && shipVector[i].status != 0))
       {
          shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string((shipVector[i].berthId + 5) % 10));
          berthVector[shipVector[i].berthId].shipId = -1;
          shipVector[i].time = 200;
-         if(14000 - frameId - berthVector[shipVector[i].berthId].time<6)
+         if (14000 - frameId - berthVector[shipVector[i].berthId].time < 6)
          {
-            robotVector[i].berthId=(i+5)%10;
+            berthVector[shipVector[i].berthId].vaild=0;
+            //robotVector[i].berthId = (i + 5) % 10;
+
          }
       }
    }
@@ -1079,7 +1151,77 @@ void PortManager::initRobotAndShip()
    for (int i = 0; i < robot_num; i++)
    {
       robotVector[i].berthId = i;
+      robotVector[i].myberthId = i;
    }
+
+   // double sum = 0;
+   // int i = 0;
+   // for (auto &berth : berth_value)
+   // {
+   //    sum += berth;
+   // }
+   // for (auto &group : berth_result)
+   // {
+   //    double value;
+   //    for (auto &berth : group)
+   //    {
+   //       value += berth_value[berth];
+   //    }
+   //    int num;
+   //    if (value / sum > 1)
+   //    {
+   //       num = value / sum;
+   //    }
+   //    else
+   //    {
+   //       num = 1;
+   //    }
+   //    for (auto &berth : group)
+   //    {
+   //       if (num--)
+   //       {
+   //          int t = 10;
+   //          while ((robotVector[i].berthId == -1 || !robotBerthReach[i][berth]) && t--)
+   //          {
+   //             i = (i + 1) % 10;
+   //          }
+   //          if (robotBerthReach[i][berth] && robotVector[i].berthId >= 0)
+   //          {
+   //             robotVector[i].berthId = berth;
+   //             robotVector[i].berth = group;
+   //             i = (i + 1) % 10;
+   //          }
+   //       }
+   //       else
+   //       {
+   //          break;
+   //       }
+   //    }
+   //    for (int c = 0; c < num; c = (c + 1) % group.size())
+   //    {
+   //       int t = 10;
+   //       while (robotVector[i].berthId == -1 || !robotBerthReach[i][c] && t--)
+   //       {
+   //          i = (i + 1) % 10;
+   //       }
+   //       if (robotBerthReach[i][c] && robotVector[i].berthId >= 0)
+   //       {
+   //          robotVector[i].berthId = group[c];
+   //          robotVector[i].berth = group;
+   //          i = (i + 1) % 10;
+   //       }
+   //    }
+   //    int n = 0;
+   //    for (int j = 0; j < robot_num; j++)
+   //    {
+   //       if (robotVector[i].berthId == -1)
+   //       {
+   //          int size = berth_result[n].size();
+   //          robotVector[i].berthId = berth_result[n][size - 1];
+   //          n++;
+   //       }
+   //    }
+   // }
 
    // robotVector[0].berthId = 0;
    // robotVector[1].berthId = 0;
@@ -1141,6 +1283,7 @@ void PortManager::distributeObject()
 }
 void PortManager::berth_fen()
 {
+
    flag1 = 0;
    //
    vector<vector<int>> t_berth_result(10);
@@ -1159,6 +1302,7 @@ void PortManager::berth_fen()
       percent_berth.insert(make_pair(berthVector[i].percent, i));
       i++;
    }
+
    //
    // 找每个泊位的最近泊位
    for (auto b : berthVector)
@@ -1175,6 +1319,7 @@ void PortManager::berth_fen()
          }
       }
    }
+
    ////
    // 泊位组合
    int j = 0;        // 分组序列
@@ -1206,10 +1351,39 @@ void PortManager::berth_fen()
       j++;
       t_val = 0;
    }
+   // std::cerr<<"test1"<<std::endl;
    // 判断是否没变
    if (berth_result != t_berth_result)
    {
       flag1 = 1;
    }
-   berth_result.swap(t_berth_result);
+   berth_result = t_berth_result;
+   // std::cerr<<"test2"<<std::endl;
+}
+void PortManager::initRobotBerthReach()
+{
+   std::vector<std::thread> threads;
+   for (int i = 0; i < 10; ++i)
+   {
+      // 创建线程，使用lambda函数处理每个机器人与所有泊位之间的关系
+      threads.push_back(std::thread([&, i]()
+                                    {
+            for (int j = 0; j < 10; ++j) {
+                if (bfs(MobileEquipment(robotVector[i].x, robotVector[i].y), MobileEquipment(berthVector[j].x, berthVector[j].y)).size()) {
+                   m.lock();
+                    robotBerthReach[i][j] = 1;
+                    m.unlock();
+                } else {
+                  m.lock();
+                    robotBerthReach[i][j] = 0;
+                    m.unlock();
+                }
+            } }));
+   }
+
+   // 等待所有线程完成
+   for (auto &thread : threads)
+   {
+      thread.join();
+   }
 }
