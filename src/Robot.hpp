@@ -13,7 +13,7 @@ public:
 
   int berthId;
   int myberthId;
-  int myberthId;
+
   int goods = 0;     // 是否携带货物。0未携带，1携带
   int status = 1;    // 状态，0表示恢复状态，1表示正常状态
   int a_status = -1; // 主动避让状态，-1表示没有，>=0表示正在主动避让
@@ -23,7 +23,7 @@ public:
   std::deque<MobileEquipment> mInstructionQueue;
   std::deque<std::string> get_pull_instructions;
   std::vector<int> berth;
-  std::vector<int> berth;
+
   Robot(int id, int x, int y, int goods, int status) : id(id), MobileEquipment(x, y), goods(goods), status(status)
   {
   }
