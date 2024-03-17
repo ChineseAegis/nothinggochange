@@ -933,21 +933,31 @@ void PortManager::checkRobot()
       // std::cerr<<berthVector[i].goods<<std::endl;
    }
    // cerr<<"begin"<<endl;
+   double sum;
+   for (auto &value : berth_value)
+   {
+      sum += value;
+   }
+   std::set<std::pair<double, int>> s;
+   for (int n = 0; n < berth_num; n++)
+   {
+      s.insert(std::make_pair(berth_value[n], n));
+   }
    for (int i = 0; i < robot_num; i++)
    {
-      //robotVector[i].time--;
-      // std::cerr<<berth_value[i]<<endl;
-      //  更改避障状态
+      // robotVector[i].time--;
+      //  std::cerr<<berth_value[i]<<endl;
+      //   更改避障状态
       if (robotVector[i].berthId == robotVector[i].myberthId)
       {
-         if (berthVector[robotVector[i].berthId].shipId == -1 && 14500 - frameId - berthVector[robotVector[i].berthId].time < 6||!berthVector[robotVector[i].berthId].vaild)
+         if (berthVector[robotVector[i].berthId].shipId == -1 && 14500 - frameId - berthVector[robotVector[i].berthId].time < 6 || !berthVector[robotVector[i].berthId].vaild)
          {
             robotVector[i].berthId = (robotVector[i].berthId + 5) % 10;
          }
       }
       else
       {
-         if (berthVector[robotVector[i].myberthId].shipId == -1 && 14500 - frameId - berthVector[robotVector[i].myberthId].time < 40||!berthVector[robotVector[i].myberthId].vaild)
+         if (berthVector[robotVector[i].myberthId].shipId == -1 && 14500 - frameId - berthVector[robotVector[i].myberthId].time < 40 || !berthVector[robotVector[i].myberthId].vaild)
          {
             robotVector[i].berthId = (robotVector[i].myberthId + 5) % 10;
          }
@@ -977,47 +987,33 @@ void PortManager::checkRobot()
 
             if (it == objectMap.end())
             {
-               if (robotVector[i].berthId != robotVector[i].myberthId)
+               if (robotVector[i].berthId != robotVector[i].myberthId && berthVector[robotVector[i].myberthId].vaild)
                {
-                  double sum;
-                  for (auto &value : berth_value)
-                  {
-                     sum += value;
-                  }
-                  if ((berth_value[robotVector[i].myberthId] / sum > 0.04 || berth_value[robotVector[i].berthId] / sum <= 0.1)&&berthVector[robotVector[i].myberthId].vaild)
+                  if ((berth_value[robotVector[i].myberthId] / sum > 0.04 || berth_value[robotVector[i].berthId] / sum <= 0.1) && berthVector[robotVector[i].myberthId].vaild)
                   {
                      robotVector[i].berthId = robotVector[i].myberthId;
                   }
                }
                if (path_of_move[robotVector[i].berthId].empty() && robotVector[i].berthId == robotVector[i].myberthId && frameId > 500)
                {
-                  double sum;
-                  for (auto &value : berth_value)
+                  std::set<std::pair<double, int>> s1=s;
+                  int id = s1.rbegin()->second;
+                  while (!robotBerthReach[i][id] || !berthVector[id].vaild)
                   {
-                     sum += value;
-                  }
-                  std::set<std::pair<double, int>> s;
-                  for (int n = 0; n < berth_num; n++)
-                  {
-                     s.insert(std::make_pair(berth_value[n], n));
-                  }
-                  int id = s.rbegin()->second;
-                  while (!robotBerthReach[i][id]||!berthVector[id].vaild)
-                  {
-                     s.erase(*s.rbegin());
-                     id = s.rbegin()->second;
+                     s1.erase(*s1.rbegin());
+                     id = s1.rbegin()->second;
                   }
                   // std::cerr << berth_value[id] / sum << endl;
-                  if (robotBerthReach[i][id] && berth_value[id] / sum >= 0.2&&berthVector[id].vaild)
+                  if (robotBerthReach[i][id] && berth_value[id] / sum >= 0.2 && berthVector[id].vaild)
                   {
                      robotVector[i].berthId = id;
-                     robotVector[i].time=300;
+                     robotVector[i].time = 300;
                   }
-                  else if (robotBerthReach[i][(robotVector[i].myberthId + 1) % 10]&&!path_of_move[(robotVector[i].myberthId + 1) % 10].empty()&&berthVector[(robotVector[i].myberthId + 1) % 10].vaild)
+                  else if (robotBerthReach[i][(robotVector[i].myberthId + 1) % 10] && !path_of_move[(robotVector[i].myberthId + 1) % 10].empty() && berthVector[(robotVector[i].myberthId + 1) % 10].vaild)
                   {
                      robotVector[i].berthId = (robotVector[i].myberthId + 1) % 10;
                   }
-                  else if (robotBerthReach[i][(robotVector[i].myberthId + 1) % 10]&&!path_of_move[(robotVector[i].myberthId + 9) % 10].empty()&&berthVector[(robotVector[i].myberthId + 9) % 10].vaild)
+                  else if (robotBerthReach[i][(robotVector[i].myberthId + 1) % 10] && !path_of_move[(robotVector[i].myberthId + 9) % 10].empty() && berthVector[(robotVector[i].myberthId + 9) % 10].vaild)
                   {
                      robotVector[i].berthId = (robotVector[i].myberthId + 9) % 10;
                   }
@@ -1113,9 +1109,8 @@ void PortManager::checkRobot()
          shipVector[i].time = 200;
          if (14000 - frameId - berthVector[shipVector[i].berthId].time < 6)
          {
-            berthVector[shipVector[i].berthId].vaild=0;
-            //robotVector[i].berthId = (i + 5) % 10;
-
+            berthVector[shipVector[i].berthId].vaild = 0;
+            // robotVector[i].berthId = (i + 5) % 10;
          }
       }
    }
