@@ -91,11 +91,12 @@ public:
    std::vector<std::unordered_map<std::pair<int, int>, int, pair_hash>> distogood;
    std::vector<vector<int>> berth_result; // 分组结果
    void input();
-   void run();                                                      // 主函数，在main中调用这个函数
-   void initData();                                                 // 从标准输入初始化数据
-   int readFrame();                                                 // 从一帧中读取数据
-   void berth_fen();                                                // 给泊位分组
-   void outputFrame();                                              // 输出一帧..
+   void run();         // 主函数，在main中调用这个函数
+   void initData();    // 从标准输入初始化数据
+   int readFrame();    // 从一帧中读取数据
+   void berth_fen();   // 给泊位分组
+   void outputFrame(); // 输出一帧..
+   void DeepCopy2DVector(const std::vector<std::vector<int>> &src, std::vector<std::vector<int>> &dest);
    void cal_path_of_maxvalue(Berth &b, std::vector<Object> &goods); // 每个泊位对应的搬运队列
    void cal_berth_value(std::vector<Object> &goods);
    bool isValid(int x, int y, int frameId);
@@ -111,12 +112,13 @@ public:
    void checkNextStep();
    void active_avoidance(int i);
    void checkRobot();
+   void init_berth_dist();
+   void selectionSortDesc(std::vector<double> &vec, vector<vector<int>> &vecc);
    void initRobotAndShip();
    void distributeObject();
    void processBerth(size_t j);
    void initRobotBerthReach();
 };
-
 void PortManager::initData()
 {
    // char ch[210][210];
@@ -155,6 +157,7 @@ void PortManager::initData()
    }
    // all_path();
    initRobotAndShip();
+   init_berth_dist();
    printf("OK\n");
    fflush(stdout);
 }
@@ -1281,51 +1284,105 @@ void PortManager::distributeObject()
          path_of_move[object.berthid].insert(object);
    }
 }
+void PortManager::init_berth_dist()
+{
+   std::vector<std::vector<int>> st(10, std::vector<int>(10, 0));
+   for (auto &b : berthVector)
+   {
+      for (auto &bb : berthVector)
+      {
+         if (b.id == bb.id)
+            continue;
+         else
+         {
+            std::vector<MobileEquipment> path;
+            if (st[b.id][bb.id] == 0)
+            {
+               path = bfs(MobileEquipment(b.x, b.y), MobileEquipment(bb.x, bb.y));
+               if (path.size() == 0)
+               {
+                  st[b.id][bb.id] = 0x3f3f3f3f;
+                  st[bb.id][b.id] = 0x3f3f3f3f;
+               }
+               else
+               {
+                  st[b.id][bb.id] = path.size();
+                  st[bb.id][b.id] = path.size();
+               }
+            }
+            if (st[b.id][bb.id] > 0 && st[b.id][bb.id] <= 100)
+            {
+               b.berthid_clo.insert(std::make_pair(st[b.id][bb.id], bb.id));
+               bb.berthid_clo.insert(std::make_pair(st[b.id][bb.id], b.id));
+            }
+         }
+      }
+   }
+}
 void PortManager::berth_fen()
 {
 
-   flag1 = 0;
+   for (auto &b : berthVector)
+   {
+      b.flag = 0;
+   }
+   flag1 = 0; // 是否发生改变
    //
-   vector<vector<int>> t_berth_result(10);
+   vector<vector<int>> t_berth_result(10, std::vector<int>(10, -1));
 
    // 计算每个泊位的价值占比
 
-   double sum_value;
-   for (auto v : berth_value)
+   double sum_value = 0;
+   for (auto &v : berth_value)
    {
       sum_value += v;
    }
    int i = 0;
-   for (auto v : berth_value)
+   for (auto &v : berth_value)
    {
       berthVector[i].percent = v / sum_value;
       percent_berth.insert(make_pair(berthVector[i].percent, i));
       i++;
    }
 
+
    //
    // 找每个泊位的最近泊位
-   for (auto b : berthVector)
-   {
-      for (auto bb : berthVector)
-      {
-         if (b.id == bb.id)
-            continue;
-         else
-         {
-            std::vector<MobileEquipment> path = bfs(MobileEquipment(b.x, b.y), MobileEquipment(bb.x, bb.y));
-            if (path.size() > 0 && path.size() <= 100)
-               b.berthid_clo.insert(std::make_pair(path.size(), bb.id));
-         }
-      }
-   }
+   // std::vector<std::vector<int>> st(10, std::vector<int>(10, 0));
+   // for (auto &b : berthVector)
+   // {
+   //    for (auto &bb : berthVector)
+   //    {
+   //       if (b.id == bb.id)
+   //          continue;
+   //       else
+   //       {
+   //          std::vector<MobileEquipment> path;
+   //          if (st[b.id][bb.id] == 0)
+   //             path = bfs(MobileEquipment(b.x, b.y), MobileEquipment(bb.x, bb.y));
+   //          if (path.size() > 0 && path.size() <= 100)
+   //          {
+   //             st[b.id][bb.id] = 1;
+   //             st[bb.id][b.id] = 1;
+   //             b.berthid_clo.insert(std::make_pair(path.size(), bb.id));
+   //             bb.berthid_clo.insert(std::make_pair(path.size(), b.id));
+   //          }
+   //       }
+   //    }
+   // }
 
    ////
    // 泊位组合
+
+   vector<double> val_fen(10); // 每个分组的百分比值
+
    int j = 0;        // 分组序列
    double t_val = 0; // 临时记录当前组的价值
-   for (auto b : percent_berth)
+
+   for (auto &b : percent_berth)
    {
+      int k = 0;
+
       if (berthVector[b.second].flag == 1)
          continue;
       if (berthVector[b.second].berthid_clo.empty())
@@ -1334,56 +1391,127 @@ void PortManager::berth_fen()
             continue;
       }
       t_val += b.first;
-      t_berth_result[j].push_back(b.second);
+
+      t_berth_result[j][k++] = b.second;
       berthVector[b.second].flag = 1;
-      while (t_val < 0.1) // 占比 小于 10%
+      // 如果本身已经大于0.1 直接不用与其他分组
+      if (b.first > 0.1)
       {
+         j++;
+         continue;
+      }
+
+      while (1)
+      {
+
+         while (!berthVector[b.second].berthid_clo.empty())
+         {
+            int t_id = (*(berthVector[b.second].berthid_clo.begin())).second;
+            if (berthVector[t_id].flag == 1)
+               berthVector[b.second].berthid_clo.erase(berthVector[b.second].berthid_clo.begin());
+            else
+            {
+               break;
+            }
+         }
+
          if (berthVector[b.second].berthid_clo.empty())
          {
+
             break;
          }
          int t_id = (*(berthVector[b.second].berthid_clo.begin())).second;
          berthVector[b.second].berthid_clo.erase(berthVector[b.second].berthid_clo.begin());
-         t_berth_result[j].push_back(t_id);
+         t_berth_result[j][k++] = t_id;
          berthVector[t_id].flag = 1;
          t_val += berthVector[t_id].percent;
+
+         if (t_val >= 0.1 && t_val != b.first)
+         {
+            if (!berthVector[b.second].berthid_clo.empty())
+            {
+               double sum = 0;
+               vector<int> v;
+               for (auto &x : berthVector[b.second].berthid_clo)
+               {
+                  int id = x.second;
+                  if (berthVector[id].percent < 0.1)
+                  {
+                     sum += berthVector[id].percent;
+                     v.push_back(id);
+                  }
+               }
+               if (sum < 0.1)
+               {
+                  for (auto &h : v)
+                  {
+                     t_berth_result[j][k++] = h;
+
+                     berthVector[h].flag = 1;
+                     t_val += berthVector[h].percent;
+                  }
+               }
+            }
+         }
       }
+
+      val_fen[j] = t_val;
+
       j++;
       t_val = 0;
    }
-   // std::cerr<<"test1"<<std::endl;
+
+   // 第一步：根据 val_fen 对第一层数组进行排序
+   selectionSortDesc(val_fen, t_berth_result);
+   // 第二步：对每个第一层数组的第二层数组进行排序
+
+   for (auto &vec : t_berth_result)
+   {
+      // 首先，移除所有值为-1的元素
+      auto newEnd = std::remove_if(vec.begin(), vec.end(),
+                                   [&](int id)
+                                   { return id == -1 || berthVector[id].percent == -1; });
+      vec.erase(newEnd, vec.end());
+
+      // 然后，对剩余的元素进行降序排序
+      std::sort(vec.begin(), vec.end(),
+                [&](int a_id, int b_id)
+                {
+                   return berthVector[a_id].percent > berthVector[b_id].percent; // 降序
+                });
+   }
+
    // 判断是否没变
    if (berth_result != t_berth_result)
    {
       flag1 = 1;
    }
-   berth_result = t_berth_result;
-   // std::cerr<<"test2"<<std::endl;
-}
-void PortManager::initRobotBerthReach()
-{
-   std::vector<std::thread> threads;
-   for (int i = 0; i < 10; ++i)
-   {
-      // 创建线程，使用lambda函数处理每个机器人与所有泊位之间的关系
-      threads.push_back(std::thread([&, i]()
-                                    {
-            for (int j = 0; j < 10; ++j) {
-                if (bfs(MobileEquipment(robotVector[i].x, robotVector[i].y), MobileEquipment(berthVector[j].x, berthVector[j].y)).size()) {
-                   m.lock();
-                    robotBerthReach[i][j] = 1;
-                    m.unlock();
-                } else {
-                  m.lock();
-                    robotBerthReach[i][j] = 0;
-                    m.unlock();
-                }
-            } }));
-   }
 
-   // 等待所有线程完成
-   for (auto &thread : threads)
+   swap(t_berth_result, berth_result);
+}
+// 排序
+
+void PortManager::selectionSortDesc(std::vector<double> &vec, vector<vector<int>> &vecc)
+{
+   // vec.size() - 1，因为最后一个元素不需要再比较
+   for (size_t i = 0; i < vec.size() - 1; ++i)
    {
-      thread.join();
+      // 假设当前索引i为最大值的索引
+      size_t maxIndex = i;
+      // 从i + 1到vec.size() - 1中查找真正的最大值的索引
+      for (size_t j = i + 1; j < vec.size(); ++j)
+      {
+         // 如果找到比当前“最大”更大的值，则更新maxIndex
+         if (vec[j] > vec[maxIndex])
+         {
+            maxIndex = j;
+         }
+      }
+      // 如果最大值的索引不是i，将其与i位置的值交换
+      if (maxIndex != i)
+      {
+         std::swap(vec[i], vec[maxIndex]);
+         swap(vecc[i], vecc[maxIndex]);
+      }
    }
 }
