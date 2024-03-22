@@ -15,10 +15,13 @@ public:
     int time;     // 到达虚拟点的时间
     int velocity; // 装载速度,指每帧可以装载的物品数
     int shipId = -1;
+    int f_shipId=-1;
     int goods = 0;
     bool flag = 0;      // 判断是否分配成功
     double percent = 0; // 占比
+    int robot_num=1;
     int vaild = 1;
+    int isObject=1;
     std::set<std::pair<int, int>> berthid_clo; // 与他最近的berthid,pair 里第一个是距离，第二个是id
 
     Berth()

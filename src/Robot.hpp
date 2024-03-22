@@ -36,26 +36,26 @@ public:
     std::string sId = std::to_string(id);
     if (path.size() > 0)
     {
-      for (int i = 0; i < path.size() - 1; i++)
+      for (int i = path.size()-1; i >0; i--)
       {
-        if (path[i + 1].x > path[i].x)
+        if (path[i - 1].x > path[i].x)
         {
           instructionQueue.push_back("move " + sId + " 3");
         }
-        else if (path[i + 1].x < path[i].x)
+        else if (path[i - 1].x < path[i].x)
         {
           instructionQueue.push_back("move " + sId + " 2");
         }
-        else if (path[i + 1].y > path[i].y)
+        else if (path[i - 1].y > path[i].y)
         {
           instructionQueue.push_back("move " + sId + " 0");
         }
-        else if (path[i + 1].y < path[i].y)
+        else if (path[i - 1].y < path[i].y)
         {
           instructionQueue.push_back("move " + sId + " 1");
         }
       }
-      for (int i = 1; i < path.size(); i++)
+      for (int i = path.size()-2; i >-1; i--)
       {
         mInstructionQueue.push_back(path[i]);
         // std::cerr<<mInstructionQueue.front().x<<" "<<mInstructionQueue.front().y<<std::endl;
