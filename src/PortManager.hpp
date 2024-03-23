@@ -1235,14 +1235,14 @@ void PortManager::checkShip()
             berthVector[(shipVector[i].berthId + 5) % 10].vaild = 0;
          }
       }
-      if (shipVector[i].time <= 0 && shipVector[i].status == 1 && (15000 - frameId - berthVector[(shipVector[i].berthId + 5) % 10].time - 500 > 10 && shipVector[i].status != 0) && berthVector[(shipVector[i].berthId + 5) % 10].vaild && boat_capacity - shipVector[i].goods_num > 5)
+      if (shipVector[i].time <= 0 && shipVector[i].status == 1 && (15000 - frameId - berthVector[(shipVector[i].berthId + 5) % 10].time - 500 > 30 && shipVector[i].status != 0) && berthVector[(shipVector[i].berthId + 5) % 10].vaild && boat_capacity - shipVector[i].goods_num > 5)
       {
          shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string((shipVector[i].berthId + 5) % 10));
          berthVector[shipVector[i].berthId].shipId = -1;
          berthVector[shipVector[i].berthId].f_shipId = -1;
          berthVector[(shipVector[i].berthId + 5) % 10].f_shipId = i;
          shipVector[i].time = stayTime;
-         if (14000 - stayTime - frameId - berthVector[shipVector[i].berthId].time <=10 || (15000 - frameId - stayTime-500 - berthVector[(shipVector[i].berthId + 5) % 10].time - 2 * berthVector[shipVector[i].berthId].time <=10 && boat_capacity - shipVector[i].goods_num - berthVector[(shipVector[i].berthId + 5) % 10].goods <= 5))
+         if (14000 - stayTime - frameId - berthVector[shipVector[i].berthId].time <= 10 || (15000 - frameId - 500 - berthVector[(shipVector[i].berthId + 5) % 10].time - 2 * berthVector[shipVector[i].berthId].time < 20 && boat_capacity - shipVector[i].goods_num - berthVector[(shipVector[i].berthId + 5) % 10].goods <= 5))
          {
             berthVector[shipVector[i].berthId].vaild = 0;
             // robotVector[i].berthId = (i + 5) % 10;
@@ -1259,7 +1259,7 @@ void PortManager::checkShip()
       {
          if (berthVector[shipVector[i].myBerthId].vaild && berthVector[(shipVector[i].myBerthId + 5) % 10].vaild && 15000 - frameId - 2 * berthVector[shipVector[i].myBerthId].time > 10 && 15000 - frameId - 2 * berthVector[(shipVector[i].myBerthId + 5) % 10].time > 10)
          {
-            if (berthVector[shipVector[i].myBerthId].goods  > berthVector[(shipVector[i].myBerthId + 5) % 10].goods )
+            if (berthVector[shipVector[i].myBerthId].goods / berthVector[shipVector[i].myBerthId].velocity > berthVector[(shipVector[i].myBerthId + 5) % 10].goods / berthVector[(shipVector[i].myBerthId + 5) % 10].velocity)
             {
                shipInstruction.push("ship " + std::to_string(i) + " " + std::to_string(shipVector[i].myBerthId));
                shipVector[i].time = stayTime;
